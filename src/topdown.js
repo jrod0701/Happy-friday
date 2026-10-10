@@ -173,7 +173,7 @@ function tdWall(c, map, ev) {
 }
 function tdCarStep(c, dt, map) {
   const I = c.in, ev = { bump: 0, nx: 0, ny: 0, landed: 0, scrape: 0 };
-  const st = (I.r ? 1 : 0) - (I.l ? 1 : 0), rate = st ? (c.steerRate || 8) : 12;
+  const st = I.st != null ? clamp(I.st, -1, 1) : (I.r ? 1 : 0) - (I.l ? 1 : 0), rate = st ? (c.steerRate || 8) : 12;
   c.steer += clamp(st - c.steer, -rate * dt, rate * dt);
   let ca = Math.cos(c.a), sa = Math.sin(c.a);
   let vF = c.vx * ca + c.vy * sa;
@@ -409,6 +409,36 @@ function tdControls(skin) {
   ];
   const map = { left: 'l', right: 'r', hb: 'hb', brk: 'brk', gas: 'gas' };
   return { inp: inp, buttons: buttons, press: id => { if (map[id]) inp[map[id]] = 1; }, release: id => { if (map[id]) inp[map[id]] = 0; } };
+}
+/* point-to-drive helper (additive; used by Mayhem): turn a desired world direction (dx,dy) + throttle (0..1) into car inputs.
+   st is analog steering (tdCarStep reads I.st when set). Auto-reverses toward the target when it is far behind at low speed,
+   and throws a handbrake brake-turn when it is behind at speed. state carries the reverse latch between frames. */
+function tdPointDrive(c, I, dx, dy, thr, hbUser, state) {
+  I.l = I.r = 0; I.gas = 0; I.brk = 0; I.hb = hbUser ? 1 : 0;
+  if (!(thr > 0) || !(dx * dx + dy * dy > 1e-6)) { I.st = 0; state.rev = 0; state.slide = 0; return 0; }
+  const ta = Math.atan2(dy, dx), ca = Math.cos(c.a), sa = Math.sin(c.a), vF = c.vx * ca + c.vy * sa;
+  const angd = (a, b) => { let d = (a - b) % 6.2832; if (d > Math.PI) d -= 6.2832; else if (d < -Math.PI) d += 6.2832; return d; };
+  const e = angd(ta, c.a), ae = Math.abs(e), sp = Math.abs(vF);
+  if (state.rev) { if (ae < 1.3 || vF > 30) state.rev = 0; }
+  else if (state.slide) { }
+  else if (ae > 2.1 && vF < 26) state.rev = 1;
+  const gk = Math.max(0.12, clamp(sp / 20, 0, 1) / (1 + Math.pow(sp / 90, 2) * 0.9)) * 2.5 * (c.turn || 1);
+  let mode = 0;
+  if (state.rev) {
+    /* back up: swing the tail toward the target */
+    const er = angd(ta, c.a + Math.PI), sg = vF >= -0.5 ? 1 : -1;
+    I.st = Math.abs(er) < 0.03 ? 0 : clamp(clamp(er * 6, -6, 6) / gk * (sg < 0 ? -1 : 1), -1, 1);
+    if (vF > 2) I.brk = 1; else if (vF > -c.rev * Math.max(0.35, thr)) I.brk = 1;
+    mode = 2;
+  } else {
+    I.st = ae < 0.03 ? 0 : clamp(clamp(e * 6.5, -6, 6) / gk * (vF >= -0.5 ? 1 : -1), -1, 1);
+    if (state.slide && (ae < 1.2 || sp < 18)) state.slide = 0;
+    if ((ae > 2.1 && sp > 26) || state.slide) { state.slide = 1; I.hb = 1; I.st = e > 0 ? 1 : -1; mode = 3; } /* pointing behind at speed: handbrake brake-turn */
+    else if (ae > 1.15 && sp > 62) { I.brk = 1; mode = 1; } /* sharp corner at speed: brake into it */
+    else if (ae > 0.6 && sp > 80) { mode = 1; } /* lift off to tighten the line */
+    else if (vF < c.maxv * thr) I.gas = 1;
+  }
+  return mode;
 }
 /* dark control deck behind the buttons */
 function tdDeck(g) { R(g, 0, TD_VIEW_H - 1, VW, VH - TD_VIEW_H + 1, BLK); R(g, 0, TD_VIEW_H - 1, VW, 1, DGR); R(g, 0, TD_VIEW_H - 3, VW, 2, 'rgba(0,0,0,0.35)'); }
