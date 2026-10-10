@@ -59,7 +59,7 @@ function nextPlayer(from) { const i = PL.indexOf(from); for (let k = 1; k <= 3; 
 
 
 /* ---- shared crew board (Firebase Realtime Database over plain fetch). Leave DB_URL empty to fall back to text codes. ---- */
-const DB_URL = '';
+const DB_URL = 'https://happy-friday-1898c-default-rtdb.firebaseio.com';
 const ROOM = 'hf-d52228436dde';
 const SYNC = !!DB_URL;
 function fridayKey() { const d = new Date(); d.setDate(d.getDate() - ((d.getDay() + 2) % 7)); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
