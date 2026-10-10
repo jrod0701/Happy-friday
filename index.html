@@ -470,12 +470,18 @@ const Stage = (function () {
     T(g, d.name, VW / 2, 38, acc, { al: 'c', s: tw(d.name, 3) <= 176 ? 3 : 2, sh: BLK });
     T(g, d.tag, VW / 2, 66, WHT, { al: 'c' });
     panel(g, 12, 86, 168, 160, acc);
-    let y = 98;
+    // wrap anything wider than the panel, then tighten line spacing if the card would overflow
+    const rows = [];
     d.how.forEach(l => {
-      if (l === '') { y += 6; return; }
-      const head = l[0] === '>';
-      T(g, head ? l.slice(1) : l, 20, y, head ? YEL : WHT); y += head ? 12 : 10;
+      if (l === '') { rows.push({ gap: 6 }); return; }
+      const head = l[0] === '>', txt = head ? l.slice(1) : l, lines = []; let cur = '';
+      txt.split(' ').forEach(w => { const nx = cur ? cur + ' ' + w : w; if (tw(nx) > 158 && cur) { lines.push(cur); cur = w; } else cur = nx; });
+      if (cur) lines.push(cur);
+      lines.forEach((ln, i) => rows.push({ s: ln, head: head, gap: head && i === lines.length - 1 ? 12 : 10 }));
     });
+    const need = rows.reduce((a, r) => a + r.gap, 0), k = Math.min(1, 142 / Math.max(1, need));
+    let y = 97;
+    rows.forEach(r => { if (r.s) T(g, r.s, 20, Math.round(y), r.head ? YEL : WHT); y += Math.max(r.s ? 8 : 2, r.gap * k); });
     bigBtn(g, 'START', BTN, t, acc === RED ? RED : GRN);
     T(g, 'MENU', QUIT.x + QUIT.w / 2, QUIT.y + 6, LGR, { al: 'c' });
   }
@@ -1430,7 +1436,7 @@ function makeSniper(seed, skin) {
 }
 const DEF_SNIPER = {
   name: 'LONG SHOT', short: 'Long Shot', series: { name: 'TARGET', icon: 'target' }, tag: 'ROOFTOP SNIPER', color: SKY, make: makeSniper,
-  how: ['>SCAN', 'DRAG TO MOVE THE SCOPE.', 'RADAR + RED ARROW POINT TO', 'THE NEXT TARGET.', 'RED = HOSTILE. BLUE = CIVILIAN.', '>STEADY', 'HOLD A FINGER STILL TO', 'SETTLE YOUR BREATH.', '>SHOOT', 'TAP FIRE. HEAD = BIG POINTS.', 'MOVING TARGETS: LEAD THEM.', 'DO NOT SHOOT CIVILIANS.']
+  how: ['>SCAN', 'DRAG TO MOVE THE SCOPE.', 'THE RADAR AND RED ARROW', 'POINT TO THE NEXT TARGET.', 'RIFLE = HOSTILE.', 'HANDS UP = CIVILIAN.', '>STEADY', 'HOLD A FINGER STILL TO', 'SETTLE YOUR BREATH.', '>SHOOT', 'TAP FIRE. HEADSHOT = BONUS.', 'LEAD MOVING TARGETS.', 'NEVER SHOOT CIVILIANS.']
 };
 DEF_SNIPER.art = function (g, x, y, w, h) {
   R(g, x, y, w, h, BLK);
@@ -2034,7 +2040,11 @@ function kongStage(seed, skin, opts) {
 
   me.press = id => {
     if (id === 'left') hl = true; else if (id === 'right') hr = true; else if (id === 'up') hu = true; else if (id === 'down') hd = true;
-    else if (id === 'jump') jumpBuf = 0.12;
+    else if (id === 'jump') {
+      const h = hero;
+      if (h.hammer > 0 && h.st !== 'dead') { h.hammer = 0; pop(h.x, h.y - 22, 'TOSSED', LGR); SFX.swish(); burst(h.x + h.face * 6, h.y - 14, [LGR, WHT, BRN], 6); }
+      else jumpBuf = 0.12;
+    }
   };
   me.release = id => { if (id === 'left') hl = false; else if (id === 'right') hr = false; else if (id === 'up') hu = false; else if (id === 'down') hd = false; };
 
@@ -2095,6 +2105,7 @@ function kongStage(seed, skin, opts) {
     const h = hero; h.t += dt;
     const dir = (hr ? 1 : 0) - (hl ? 1 : 0);
     if (h.hammer > 0) { h.hammer -= dt; if (h.hammer < 0) h.hammer = 0; }
+    { const jb = me.buttons && me.buttons.find(b => b.id === 'jump'); if (jb) jb.label = h.hammer > 0 ? 'TOSS' : 'JUMP'; }
     if (h.st === 'dead') {
       h.dead += dt; h.vy += 400 * dt; h.y += h.vy * dt * (h.dead > 0.35 ? 1 : 0.3); h.spin += dt * 12;
       if (h.dead > 1.5) { if (lives <= 0) { me.over = true; overT = 0; endMsg = 'GAME OVER'; } else respawn(); }
@@ -2590,7 +2601,7 @@ function makeKong(seed, skin) {
 
 const DEF_KONG = {
   name: 'KONG', short: 'Kong', series: { name: 'ACTION', icon: 'ladder' }, tag: 'GIRDER CLIMB', color: YEL, make: makeKong,
-  how: ['>CLIMB', 'REACH THE TOP AND RESCUE', 'THE CAPTIVE. CLEAR A STAGE', 'AND THE NEXT ONE STARTS:', 'GIRDERS, BELTS, LIFTS,', 'RIVETS. BEAT THE CLOCK.', '>JUMP', 'THE ARC IS LOCKED IN THE', 'AIR. HOP BARRELS +100.', 'FALLING FAR IS FATAL.', '>HAMMER', 'SMASH STUFF +300. THEN', 'BEAT THE BONUS CLOCK.']
+  how: ['>CLIMB', 'REACH THE TOP AND RESCUE', 'THE CAPTIVE. CLEAR A STAGE', 'AND THE NEXT ONE STARTS:', 'GIRDERS, BELTS, LIFTS,', 'RIVETS. BEAT THE CLOCK.', '>JUMP', 'THE ARC IS LOCKED IN THE', 'AIR. HOP BARRELS +100.', 'FALLING FAR IS FATAL.', '>HAMMER', 'SMASH STUFF +300.', 'TAP JUMP TO TOSS IT.']
   ,
   art(g, x, y, w, h) {
     /* night sky, big moon behind the brute, red truss girders, hero leaping a barrel */
@@ -3515,7 +3526,7 @@ function makeWheelman(seed, skin) {
 }
 const DEF_WHEELMAN = {
   name: 'FARE RUSH', short: 'Fare Rush', series: { name: 'DRIVING', icon: 'siren' }, tag: 'TAXI MADNESS', color: YEL, make: makeWheelman,
-  how: ['>DRIVE', 'GAS TO GO, BRAKE TO STOP', 'OR REVERSE. STEER YOURSELF.', '>FARES', 'STOP IN THE GREEN RING TO', 'PICK UP. FOLLOW THE ARROW', 'AND THE MAP TO THE DROP.', 'FASTER DROP = BIGGER TIP.', '>EXTRAS', 'DRIFT, JUMP RAMPS, MISS CARS', 'BY A HAIR. CRASH = LOSE CHAIN.', 'EACH DROP ADDS TIME.'],
+  how: ['>DRIVE', 'GAS TO GO, BRAKE TO STOP', 'OR REVERSE. STEER YOURSELF.', '>FARES', 'STOP IN THE GREEN RING TO', 'PICK UP. FOLLOW THE ARROW', 'AND THE MAP TO THE DROP.', 'FASTER DROP = BIGGER TIP.', '>EXTRAS', 'DRIFT, JUMP RAMPS, MISS CARS', 'BY A HAIR. CRASH = NO CHAIN.', 'EACH DROP ADDS TIME.'],
   art(g, x, y, w, h) {
     g.save(); g.beginPath(); g.rect(x, y, w, h); g.clip();
     /* dusk sky in dithered bands */
@@ -5116,7 +5127,7 @@ function makeDuel(seed, skin) {
 }
 const DEF_DUEL = {
   name: 'DUEL', short: 'Duel', series: { name: 'FIGHTING', icon: 'swords' }, tag: 'ONE STRIKE', color: RED, make: makeDuel,
-  how: ['>READ', 'ONE CLEAN HIT KILLS.', 'WATCH THE BLADE: ITS HEIGHT', 'IS THE STANCE. GLINT = REAL.', '>DEFEND', 'GUARD IN THE SAME STANCE', 'TO PARRY, THEN STRIKE FREE.', 'WRONG STANCE = CUT DOWN.', '>MOVE', 'STEP BACK TO WHIFF THEM,', 'THEN PUNISH. WHIFFS COST.', '>FIVE DUELS, 75 SECONDS', 'FAST KILLS + STREAK = SCORE.']
+  how: ['>READ', 'ONE CLEAN HIT KILLS.', 'BLADE HEIGHT = STANCE.', 'A GLINT MEANS IT IS REAL.', '>DEFEND', 'GUARD IN THE SAME STANCE', 'TO PARRY, THEN STRIKE.', 'WRONG STANCE = CUT DOWN.', '>MOVE', 'STEP BACK TO MAKE THEM', 'MISS, THEN PUNISH.', '>FIVE DUELS, 75 SECONDS', 'FAST KILLS + STREAK = SCORE.']
 };
 DEF_DUEL.art = function (g, x, y, w, h) {
   /* sunset duel: banded sky, huge sun, two silhouettes clashing on a ridge, sparks at the crossing */
@@ -5368,6 +5379,7 @@ function runHaz(g, x, y, w, h, c1, c2, per) {
 }
 /* scaled sprite cache: log-quantised scale, crisp alpha, optional fog tint (built once per size) */
 const RUN_LQ = 22;
+const RUN_SHEEN = ['#ff77a8', '#29adff', '#ffec27', '#00e436'];
 function runMip(img, s, fq, fogC) {
   const li = Math.round(Math.log(s) * RUN_LQ), sq = Math.exp(li / RUN_LQ);
   const m = img.__m || (img.__m = new Map()), key = fq ? li * 16 + fq + fogC : li * 16;
@@ -5390,66 +5402,110 @@ function runMute(cv, tint, k) {
   g.putImageData(d, 0, 0); return cv;
 }
 function runBox(g, x, y, w, h, c, o) { R(g, x, y, w, h, o == null ? BLK : o); R(g, x + 1, y + 1, w - 2, h - 2, c); }
+/* ---------- solid obstacle front-face textures (scale 1; mip-cached per quantised scale + fog step by runMip) ---------- */
+let RUN_OB = null;
+function runPix(w, h, fn) { return runCv(w, h, g => { for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const c = fn(x, y); if (c) { fc(g, c); g.fillRect(x, y, 1, 1); } } }); }
+function runObTex() {
+  if (RUN_OB) return RUN_OB;
+  const X = {}, W1 = '#e6b47a', W2 = '#c68c4e', W3 = '#93602e', W4 = '#4a2e12', HB = '#16141c';
+  /* shipping crate: frame battens, planks, stencilled part number, hazard band */
+  X.crate = runCv(39, 30, g => {
+    R(g, 0, 0, 39, 30, W2);
+    for (let y = 9; y < 26; y += 5) { R(g, 4, y, 31, 1, W3); R(g, 4, y + 1, 31, 1, '#d39a5c'); }
+    R(g, 0, 4, 4, 26, W1); R(g, 3, 4, 1, 22, W3); R(g, 35, 4, 4, 26, '#ad763e'); R(g, 35, 4, 1, 22, W4);
+    R(g, 0, 25, 39, 5, '#ad763e'); R(g, 0, 25, 39, 1, '#e8b880'); R(g, 0, 29, 39, 1, W3);
+    runHaz(g, 0, 0, 39, 4, '#ffd21a', HB, 6); R(g, 0, 4, 39, 1, W4);
+    R(g, 10, 11, 19, 11, '#d6a066'); T(g, '47A', 19, 13, '#3a220c', { al: 'c' });
+    [[1, 6], [37, 6], [1, 27], [37, 27]].forEach(p => P(g, p[0], p[1], '#5f574f'));
+  });
+  /* pallet + shrink-wrapped load */
+  X.palB = runCv(41, 6, g => {
+    R(g, 0, 0, 41, 6, W2); R(g, 0, 0, 41, 1, W1); R(g, 0, 5, 41, 1, W3);
+    R(g, 4, 2, 12, 3, '#1c1208'); R(g, 25, 2, 12, 3, '#1c1208'); R(g, 4, 2, 12, 1, '#3a2614'); R(g, 25, 2, 12, 1, '#3a2614');
+  });
+  X.load = runCv(38, 24, g => {
+    R(g, 0, 0, 38, 24, '#c9a46a'); R(g, 0, 0, 38, 1, '#ecd4a0');
+    R(g, 18, 0, 1, 24, '#94703e'); R(g, 0, 11, 38, 1, '#94703e'); R(g, 0, 12, 38, 1, '#dcbc84');
+    R(g, 7, 0, 3, 11, '#e9dbb6'); R(g, 26, 12, 3, 12, '#e9dbb6');
+    R(g, 3, 0, 2, 24, '#3a3440'); R(g, 33, 0, 2, 24, '#3a3440');
+    R(g, 21, 2, 10, 7, BLK); runHaz(g, 22, 3, 8, 5, '#ffd21a', HB, 4);
+    g.globalAlpha = 0.35; L(g, 1, 22, 11, 1, '#ffffff'); L(g, 12, 23, 22, 13, '#ffffff'); g.globalAlpha = 1;
+    R(g, 37, 0, 1, 24, '#94703e');
+  });
+  /* rotor-blade shipping case, lying flat */
+  X.cas = runCv(42, 22, g => {
+    R(g, 0, 0, 42, 22, '#56683f'); R(g, 0, 0, 42, 1, '#88a066'); R(g, 0, 6, 42, 1, '#28321e'); R(g, 0, 7, 42, 1, '#74895a'); R(g, 0, 19, 42, 3, '#36442a');
+    runHaz(g, 0, 0, 5, 22, '#ffd21a', HB, 6); runHaz(g, 37, 0, 5, 22, '#ffd21a', HB, 6); R(g, 5, 0, 1, 22, '#28321e'); R(g, 36, 0, 1, 22, '#28321e');
+    R(g, 10, 3, 4, 6, BLK); R(g, 11, 4, 2, 4, '#ffd21a'); R(g, 28, 3, 4, 6, BLK); R(g, 29, 4, 2, 4, '#ffd21a');
+    T(g, 'ROTOR', 21, 10, '#e4e4bc', { al: 'c' });
+  });
+  /* A-frame barrier board */
+  X.bar = runCv(43, 9, g => { R(g, 0, 0, 43, 9, BLK); runHaz(g, 1, 1, 41, 7, '#ffd21a', HB, 8); R(g, 1, 1, 41, 1, '#fff08a'); g.globalAlpha = 0.35; R(g, 1, 6, 41, 2, BLK); g.globalAlpha = 1; R(g, 2, 3, 3, 3, '#ff2a40'); R(g, 38, 3, 3, 3, '#ff2a40'); P(g, 2, 3, '#ffb0b0'); P(g, 38, 3, '#ffb0b0'); });
+  /* cable reel flange: plywood, yellow/black rim, bolts, steel hub */
+  X.reel = runPix(38, 38, (x, y) => {
+    const dx = x - 18.5, dy = y - 18.5, r = Math.hypot(dx, dy), a = Math.atan2(dy, dx), lit = (-dx - dy) / (r || 1);
+    if (r > 19) return null; if (r > 17.6) return W4;
+    if (r > 15) return (Math.floor((a + Math.PI) / (Math.PI / 6)) & 1) ? (lit > 0.5 ? '#ffe45a' : '#ffd21a') : HB;
+    if (r > 14) return W4;
+    if (r > 4.2) {
+      for (let i = 0; i < 6; i++) { const ba = i * Math.PI / 3 + 0.5; if (Math.hypot(dx - Math.cos(ba) * 10, dy - Math.sin(ba) * 10) < 1.4) return '#2a2a34'; }
+      if (Math.abs(r - 12.3) < 0.5) return W3;
+      return lit > 0.55 && r > 9 ? '#dca266' : (lit < -0.6 && r > 9 ? '#ad763e' : W2);
+    }
+    if (r > 2.2) return lit > 0.2 ? '#dfe6ee' : '#8a93a3';
+    return '#0e0e14';
+  });
+  /* rotor blade leading edge, red/white tips */
+  const BR = ['#ffffff', '#eef2f7', '#dfe6ee', '#c7cfdc', '#b3bccb', '#9aa4b2', '#7c8798', '#5a6272'];
+  X.blade = runPix(57, 8, (x, y) => {
+    if ((y === 0 || y === 7) && (x < 2 || x > 54)) return null;
+    if (x < 9 || x > 47) { if ((Math.floor(x / 3) & 1)) return BR[y]; return y < 3 ? '#ff6a6a' : y < 6 ? '#e8202c' : '#9a1018'; }
+    if (x >= 26 && x <= 30) return y < 3 ? '#8a93a3' : '#4a5262';
+    return BR[y];
+  });
+  /* tail-boom section, open end */
+  X.ring = runPix(28, 28, (x, y) => {
+    const dx = x - 13.5, dy = y - 13.5, r = Math.hypot(dx, dy);
+    if (r > 14) return null; if (r > 13) return '#5a1010';
+    if (r > 9.6) return dx + dy < -7 ? '#ff7a6a' : dx + dy > 7 ? '#a8241c' : '#e0382c';
+    if (r > 8.6) return '#4a3a48';
+    if (Math.abs(r - 6) < 0.6) return '#2e2638';
+    if (r < 1.2) return '#ff9a3c';
+    return '#120e18';
+  });
+  /* low gantry girder with LOW CLEARANCE panel */
+  X.gird = runCv(158, 16, g => {
+    R(g, 0, 0, 158, 16, '#d8342c'); R(g, 0, 0, 158, 1, '#ff9a8a'); R(g, 0, 1, 158, 1, '#ff6a5a'); R(g, 0, 2, 158, 1, '#8f2018'); R(g, 0, 13, 158, 1, '#ff6a5a'); R(g, 0, 14, 158, 2, '#7a1a12');
+    runHaz(g, 0, 3, 20, 10, '#ffffff', '#d8342c', 8); runHaz(g, 138, 3, 20, 10, '#ffffff', '#d8342c', 8);
+    R(g, 33, 3, 92, 10, '#5a1010'); R(g, 34, 4, 90, 8, '#fff1e8'); T(g, 'LOW CLEARANCE', 79, 5, '#d8342c', { al: 'c' });
+    for (let x = 24; x < 136; x += 8) if (x < 31 || x > 126) { P(g, x, 6, '#5a1010'); P(g, x, 10, '#5a1010'); }
+  });
+  /* forklift body front, load, pallet */
+  X.flB = runCv(39, 28, g => {
+    R(g, 0, 0, 39, 28, '#2f7fd0'); R(g, 0, 0, 39, 1, '#8fd0ff'); R(g, 0, 1, 39, 1, '#5aa8ec'); R(g, 37, 0, 2, 20, '#1d5a9e');
+    for (const hx of [2, 31]) { R(g, hx, 4, 6, 5, BLK); R(g, hx + 1, 5, 4, 3, '#fff6c0'); P(g, hx + 1, 5, '#ffffff'); }
+    R(g, 12, 4, 15, 11, '#14284a'); for (let y = 6; y < 15; y += 2) R(g, 13, y, 13, 1, '#2f5a9a');
+    R(g, 0, 19, 39, 9, '#1d2b53'); R(g, 0, 19, 39, 1, '#4a5a8a'); runHaz(g, 1, 21, 6, 5, '#ffd21a', HB, 4); runHaz(g, 32, 21, 6, 5, '#ffd21a', HB, 4);
+  });
+  X.ld = runCv(31, 22, g => {
+    R(g, 0, 0, 31, 22, '#c9a46a'); R(g, 0, 0, 31, 1, '#ecd4a0'); R(g, 15, 0, 1, 22, '#8a6a3a'); R(g, 0, 10, 31, 1, '#8a6a3a'); R(g, 0, 11, 31, 1, '#dcbc84');
+    R(g, 6, 0, 3, 10, '#e9dbb6'); R(g, 22, 0, 3, 10, '#e9dbb6');
+    [[4, 14], [3, 15], [5, 15], [4, 16], [4, 17], [9, 14], [8, 15], [10, 15], [9, 16], [9, 17]].forEach(p => P(g, p[0], p[1], '#2a1a0a'));
+    R(g, 19, 13, 9, 6, '#f4f4f4'); for (const bx of [20, 22, 23, 25, 26]) R(g, bx, 14, 1, 3, BLK);
+    R(g, 30, 0, 1, 22, '#8a6a3a');
+  });
+  X.palS = runCv(33, 5, g => { R(g, 0, 0, 33, 5, W2); R(g, 0, 0, 33, 1, W1); R(g, 3, 2, 10, 2, '#1c1208'); R(g, 20, 2, 10, 2, '#1c1208'); R(g, 0, 4, 33, 1, W3); });
+  /* scissor lift base + platform; dolly base */
+  X.scB = runCv(37, 11, g => { R(g, 0, 0, 37, 11, '#2f7fd0'); R(g, 0, 0, 37, 1, '#8fd0ff'); R(g, 0, 1, 37, 1, '#5aa8ec'); R(g, 0, 9, 37, 2, '#1d5a9e'); T(g, 'LIFT', 18, 2, '#10285a', { al: 'c' }); runHaz(g, 1, 2, 4, 7, '#ffd21a', HB, 4); runHaz(g, 32, 2, 4, 7, '#ffd21a', HB, 4); });
+  X.scP = runCv(41, 4, g => { R(g, 0, 0, 41, 4, '#2f7fd0'); R(g, 0, 0, 41, 1, '#8fd0ff'); R(g, 0, 3, 41, 1, '#1d5a9e'); });
+  X.dol = runCv(87, 9, g => { R(g, 0, 0, 87, 9, '#2f7fd0'); R(g, 0, 0, 87, 1, '#8fd0ff'); R(g, 0, 1, 87, 1, '#5aa8ec'); R(g, 0, 7, 87, 2, '#1d5a9e'); for (let x = 4; x < 84; x += 10) R(g, x, 3, 5, 3, '#1d5a9e'); R(g, 38, 2, 11, 5, '#e8eef5'); R(g, 40, 3, 7, 3, '#2f7fd0'); });
+  RUN_OB = X; return X;
+}
 const RUN_SPR = {};
 function runSprites(th) {
   if (RUN_SPR[th]) return RUN_SPR[th];
   const TH = RUN_THEMES[th], S = {};
   const hb = TH.heli[0], ha = TH.heli[1];
-  S.crate = runCv(40, 32, g => {
-    runBox(g, 0, 0, 40, 32, '#c98b4a'); R(g, 1, 1, 38, 2, '#e8b377');
-    for (let y = 12; y < 31; y += 6) R(g, 1, y, 38, 1, '#8a5a2b');
-    L(g, 3, 10, 36, 29, '#8a5a2b', 2); L(g, 36, 10, 3, 29, '#8a5a2b', 2);
-    R(g, 0, 0, 40, 8, BLK); runHaz(g, 1, 1, 38, 6, YEL, BLK, 8);
-    R(g, 0, 31, 40, 1, '#5a3a18');
-  });
-  S.barrier = runCv(48, 20, g => {
-    R(g, 3, 6, 4, 14, BLK); R(g, 41, 6, 4, 14, BLK); R(g, 4, 6, 2, 13, DGR); R(g, 42, 6, 2, 13, DGR);
-    R(g, 0, 1, 48, 12, BLK); runHaz(g, 1, 2, 46, 10, YEL, BLK, 8); R(g, 2, 3, 2, 2, RED); R(g, 44, 3, 2, 2, RED);
-    R(g, 1, 2, 46, 1, '#ffe86a');
-  });
-  const reel = (ph) => runCv(38, 38, g => {
-    D(g, 19, 19, 18, BLK); D(g, 19, 19, 17, '#8a5a2b'); D(g, 19, 19, 15, '#c98b4a');
-    for (let i = 0; i < 12; i++) { const a = ph + i * Math.PI / 6; const x0 = 19 + Math.cos(a) * 12, y0 = 19 + Math.sin(a) * 12; D(g, x0, y0, 2, i & 1 ? YEL : BLK); }
-    D(g, 19, 19, 9, BLK); D(g, 19, 19, 8, ORG); D(g, 19, 19, 5, '#ff6a00'); D(g, 19, 19, 3, BLK); D(g, 19, 19, 1, '#555555');
-    for (let i = 0; i < 4; i++) { const a = ph * 2 + i * Math.PI / 2; L(g, 19, 19, 19 + Math.cos(a) * 8, 19 + Math.sin(a) * 8, '#7a3d00'); }
-  });
-  S.reel = [reel(0), reel(0.26)];
-  S.blade = runCv(58, 16, g => {
-    R(g, 0, 2, 58, 12, BLK); R(g, 1, 3, 56, 10, '#e8eef5'); R(g, 1, 3, 56, 2, WHT); R(g, 1, 11, 56, 2, '#9aa4b2');
-    runHaz(g, 1, 3, 12, 10, RED, WHT, 8); runHaz(g, 45, 3, 12, 10, RED, WHT, 8);
-    R(g, 18, 0, 4, 16, BLK); R(g, 36, 0, 4, 16, BLK); R(g, 19, 1, 2, 14, DGR); R(g, 37, 1, 2, 14, DGR);
-    R(g, 27, 5, 4, 4, RED);
-  });
-  S.pipe = runCv(58, 16, g => {
-    R(g, 0, 2, 58, 12, BLK); R(g, 1, 3, 56, 10, '#8c96a6'); R(g, 1, 3, 56, 3, '#c7cfdc'); R(g, 1, 11, 56, 2, '#5a6272');
-    for (let x = 6; x < 52; x += 14) { R(g, x, 2, 5, 12, BLK); R(g, x + 1, 3, 3, 10, RED); }
-    D(g, 29, 8, 4, BLK); D(g, 29, 8, 3, RED); R(g, 26, 7, 7, 2, WHT);
-  });
-  S.fork = runCv(46, 54, g => {
-    R(g, 3, 40, 10, 14, BLK); R(g, 33, 40, 10, 14, BLK); R(g, 5, 42, 6, 10, '#333333'); R(g, 35, 42, 6, 10, '#333333');
-    runBox(g, 6, 30, 34, 16, '#3a8fd8'); R(g, 7, 31, 32, 2, '#8fd0ff');
-    runBox(g, 9, 9, 28, 24, '#27527e'); R(g, 11, 11, 24, 18, BLK); for (let x = 11; x < 35; x += 4) R(g, x, 11, 1, 18, '#3a6a9a'); R(g, 11, 20, 24, 1, '#3a6a9a');
-    R(g, 18, 22, 10, 8, '#e8b377'); R(g, 20, 24, 6, 4, PEACH);
-    R(g, 7, 6, 32, 4, BLK); R(g, 8, 7, 30, 2, '#3a8fd8');
-    R(g, 20, 1, 6, 5, BLK); R(g, 21, 2, 4, 3, RED); R(g, 22, 2, 2, 1, '#ff9a9a');
-    R(g, 14, 22, 2, 24, '#666666'); R(g, 30, 22, 2, 24, '#666666'); R(g, 11, 47, 24, 3, DGR);
-    R(g, 8, 36, 4, 4, YEL); R(g, 34, 36, 4, 4, YEL);
-  });
-  S.cart = runCv(44, 44, g => {
-    R(g, 5, 38, 8, 6, BLK); R(g, 31, 38, 8, 6, BLK);
-    runBox(g, 2, 6, 40, 34, '#3a8fd8'); R(g, 3, 7, 38, 3, '#8fd0ff');
-    for (let i = 0; i < 4; i++) { const y = 12 + i * 7; R(g, 5, y, 34, 5, '#27527e'); R(g, 5, y, 34, 1, '#5aa8ec'); R(g, 18, y + 2, 8, 2, LGR); }
-    R(g, 0, 2, 44, 5, BLK); R(g, 1, 3, 42, 3, '#d0d6e0'); R(g, 6, 0, 3, 8, BLK); R(g, 35, 0, 3, 8, BLK);
-  });
-  S.dolly = runCv(94, 50, g => {
-    R(g, 6, 42, 12, 8, BLK); R(g, 76, 42, 12, 8, BLK); R(g, 8, 44, 8, 5, '#333333'); R(g, 78, 44, 8, 5, '#333333');
-    runBox(g, 4, 34, 86, 10, '#3a8fd8'); R(g, 5, 35, 84, 2, '#8fd0ff');
-    R(g, 10, 24, 6, 12, BLK); R(g, 78, 24, 6, 12, BLK);
-    E(g, 47, 20, 42, 20, BLK); E(g, 47, 20, 41, 19, hb); E(g, 47, 14, 38, 11, '#ffffff'); E(g, 47, 29, 40, 8, '#aeb8c8');
-    E(g, 47, 17, 24, 8, '#222c3c'); E(g, 47, 16, 22, 6, '#4a6a8a'); R(g, 27, 12, 40, 1, '#9acbf0');
-    R(g, 8, 24, 78, 3, ha); R(g, 46, 5, 3, 16, '#222c3c');
-    for (let x = 14; x < 82; x += 12) R(g, x, 30, 1, 5, '#7c8798');
-  });
   const coin = (w) => runCv(11, 11, g => {
     const c = 5, rx = Math.max(1, w); E(g, c, c, rx + 1, 5, '#7a4a00'); E(g, c, c, rx, 4, '#ffa300'); if (rx > 2) { E(g, c, c, rx - 1, 3, '#ffec27'); P(g, c - 1, c - 2, WHT); P(g, c - 2, c - 1, '#fff7a0'); R(g, c - 1, c, 2, 2, '#ffa300'); }
   });
@@ -5907,11 +5963,48 @@ function makeRunner(seed, skin) {
     }
   }
   function strips(l0, l1, n, ca, cb, ph) { const o = [], w = (l1 - l0) / n; for (let i = 0; i < n; i++) o.push([l0 + i * w, l0 + (i + 1) * w + 0.01, ((i + ph) & 1) ? ca : cb]); return o; }
+  /* open maintenance pit: per scanline, the ray through the hole hits the far wall, the pit floor, or a side wall */
+  function pitRows(g, o, cx) {
+    const d = 64, l0 = o.lane - 0.5, l1 = o.lane + 0.5, z0 = o.z, z1 = o.z + o.len, th = ZT(z0);
+    const zr0 = Math.max(z0 - pz, -1.2), zr1 = Math.min(z1 - pz, RUN_ZV); if (zr1 <= zr0) return;
+    const s1 = runS(z1 - pz), fy1 = runFy(s1), a1 = RUN_LW * s1, b1 = 96 + (Lof(z1 - pz) - cx) * a1, xw0 = b1 + l0 * a1, xw1 = b1 + l1 * a1;
+    const ya = Math.ceil(runFy(runS(zr1))), yb = Math.floor(runFy(runS(zr0)));
+    for (let y = ya; y <= yb && y < VH + 8; y++) {
+      const s = (y + 0.5 - rzH) / rzK; if (s < RUN_SMIN) continue;
+      const zr = RUN_DC / s - RUN_DC, a = RUN_LW * s, base = 96 + (Lof(zr) - cx) * a, xo0 = base + l0 * a, xo1 = base + l1 * a;
+      const sf = (y + 0.5 - rzH) / (rzK + d), zf = RUN_DC / sf - RUN_DC, F = c => runFc(c, s, 0.2, th);
+      let i0, i1, ic, far = false, hh = 0;
+      if (pz + zf >= z1) {
+        far = true; hh = (y + 0.5 - fy1) / s1; i0 = xw0; i1 = xw1;
+        ic = hh < 2.5 ? '#8a93a3' : hh < 5 ? ((Math.floor(y / 2) & 1) ? '#ffd21a' : '#16141c') : runMix(runMix('#4e4a58', '#141218', (hh - 5) / d), '#ff7a1a', clamp((hh - d * 0.7) / (d * 0.3), 0, 1) * 0.55);
+      } else {
+        const af = RUN_LW * sf, bf = 96 + (Lof(zf) - cx) * af; i0 = bf + l0 * af; i1 = bf + l1 * af;
+        const gl = clamp(((pz + zf) - (z1 - 0.8)) / 0.8, 0, 1);
+        ic = runMix((Math.floor((pz + zf) * 3) & 1) ? '#16121c' : '#0c0a10', '#ff7a1a', gl * 0.4);
+      }
+      i0 = clamp(i0, xo0, xo1); i1 = clamp(i1, xo0, xo1);
+      R(g, xo0, y, i0 - xo0, 1, F(far && hh < 5 ? '#26222c' : '#141218'));
+      R(g, i1, y, xo1 - i1, 1, F(far && hh < 5 ? '#4a4652' : '#2c2834'));
+      R(g, i0, y, i1 - i0, 1, F(ic));
+      if (far && hh > 5) {   /* access ladder on the far wall */
+        const w = i1 - i0, rw = Math.max(1, Math.round(a1 * 0.03));
+        for (const u of [0.68, 0.86]) R(g, i0 + u * w, y, rw, 1, F('#8a93a3'));
+        if ((Math.floor(hh) % 9) < 1.2) R(g, i0 + 0.68 * w, y, 0.18 * w + rw, 1, F('#8a93a3'));
+      }
+    }
+  }
   function drawDecals(g, cx) {
     for (let i = oi; i < objs.length; i++) {
       const o = objs[i]; if (o.z > pz + RUN_ZV) break;
       if (o.k === 'U') {
-        bandRows(g, o.z, o.z + o.len, o.lane - 0.5, o.lane + 0.5, (wz) => { const u = (wz - o.z) / o.len, w = Math.sin(u * Math.PI); return w < 0.15 ? null : ((Math.floor(wz * 3) & 1) ? '#2a3f6a' : '#3a5a90'); }, cx);
+        bandRows(g, o.z, o.z + o.len, 0, 0, (wz) => {   /* hydraulic-fluid slick: irregular purple blob with a drifting oily sheen */
+          const u = (wz - o.z) / o.len, sn = Math.sin(u * Math.PI); if (sn < 0.08) return null;
+          const c = o.lane + 0.08 * Math.sin(u * 4 + o.z), w = 0.46 * Math.pow(sn, 0.45) * (1 + 0.1 * Math.sin(u * 13 + o.z * 3) + 0.06 * Math.sin(u * 29));
+          const sx = c - w * 0.5 + 0.1 * Math.sin(wz * 1.7 + t * 0.7), sc = RUN_SHEEN[(Math.floor(wz * 1.3 + t * 0.4) % 4 + 4) % 4], st = (Math.floor(wz * 4) & 3) === 0;
+          const o2 = [[c - w, c + w, '#2a1838'], [c - w + 0.05, c + w - 0.05, '#3a2250']];
+          if (st) o2.push([sx, sx + w * 0.7, runMix(sc, '#3a2250', 0.6)]); else o2.push([c - w * 0.6, c - w * 0.3, '#4c3068']);
+          return o2;
+        }, cx);
         continue;
       }
       const a = RUN_KT[o.k].act, v0 = o.v || 12, bz = o.z - 0.4 * v0 - 2.6;
@@ -5919,11 +6012,7 @@ function makeRunner(seed, skin) {
         const l0 = o.lane - 0.5, l1 = o.lane + 0.5, L = o.len;
         /* hazard-striped lips, dark depth gradient, orange glow on the far wall, plus a wide warning apron */
         bandRows(g, o.z - 0.9, o.z, l0 - 0.04, l1 + 0.04, (wz) => strips(l0 - 0.04, l1 + 0.04, 8, '#ffd21a', '#14141c', Math.floor(wz * 2.5)), cx, 0.25);
-        bandRows(g, o.z, o.z + L, l0, l1, (wz) => {
-          const u = (wz - o.z) / L;
-          if (u > 0.82) return runMix('#0a0508', '#ff7a1a', (u - 0.82) / 0.18 * 0.9);
-          return runMix('#2a1018', '#000000', Math.min(1, u * 1.4));
-        }, cx, 0.2);
+        pitRows(g, o, cx);
         bandRows(g, o.z + L, o.z + L + 0.5, l0 - 0.04, l1 + 0.04, () => strips(l0 - 0.04, l1 + 0.04, 8, '#ffd21a', '#14141c', 1), cx, 0.25);
         bandRows(g, o.z + 0.3, o.z + L - 0.2, l0 - 0.06, l0, () => '#ffd21a', cx, 0.25); bandRows(g, o.z + 0.3, o.z + L - 0.2, l1, l1 + 0.06, () => '#ffd21a', cx, 0.25);
       }
@@ -6016,37 +6105,238 @@ function makeRunner(seed, skin) {
     return it;
   }
   function shadow(g, x, fy, w, s, a) { g.globalAlpha = a; E(g, x, fy, Math.max(1, w * s), Math.max(1, 3 * s), BLK); g.globalAlpha = 1; }
-  function drawObs(g, o, cx) {
-    const zr = o.z - pz, s = runS(zr), fy = runFy(s), x = px3(o.lane, zr, s, cx), fa = fadeA(s), SPR = sprAt(o.z);
-    if (o.k === 'C') { shadow(g, x, fy, 20, s, 0.34 * fa); blit(g, SPR.crate, x, fy, s, fa, 0.55); }
-    else if (o.k === 'B') { shadow(g, x, fy, 22, s, 0.34 * fa); blit(g, SPR.barrier, x, fy, s, fa, 0.55); }
-    else if (o.k === 'R') { shadow(g, x, fy, 18, s, 0.34 * fa); blit(g, SPR.reel[Math.floor(t * 8) & 1], x, fy, s, fa, 0.55); }
-    else if (o.k === 'F') {
-      if (o.pair) { const x2 = px3(o.lane + 0.5, zr, s, cx); shadow(g, x2, fy, 46, s, 0.34 * fa); blit(g, SPR.dolly, x2, fy, s, fa, 0.55); }
-      else { shadow(g, x, fy, 22, s, 0.34 * fa); blit(g, o.var === 1 ? SPR.cart : SPR.fork, x, fy, s, fa, 0.55); if (o.var !== 1 && (Math.floor(t * 4) & 1)) R(g, x - 2 * s, fy - 53 * s, Math.max(1, 4 * s), Math.max(1, 3 * s), '#ff9a9a'); }
+  /* ---------- solid obstacles: extruded boxes / stacked discs in the floor projection ----------
+     every vertex is placed from the object's rounded anchor + offsets at a log-quantised scale, so shapes step
+     cleanly as they approach instead of shimmering. Key light: top-left. */
+  let OC = 0, OL = 0, OTH = RUN_TH;
+  const QS = s => Math.exp(Math.round(Math.log(s) * RUN_LQ) / RUN_LQ);
+  function pj(lat, z, h) {
+    const zr = Math.max(z - pz, -0.95), s = runS(zr), q = QS(s);
+    return [Math.round(px3(OL, zr, s, OC)) + Math.round((lat - OL) * RUN_LW * q), Math.round(runFy(s)) - Math.round(h * q), s, q];
+  }
+  const ofc = (c, s) => runFc(c, s, 0.55, OTH);
+  const lp = (a, b, u) => [a[0] + (b[0] - a[0]) * u, a[1] + (b[1] - a[1]) * u];
+  function hull(P) {
+    const p = P.map(a => [a[0], a[1]]).sort((a, b) => a[0] - b[0] || a[1] - b[1]), cr = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+    const lo = [], up = [];
+    for (const q of p) { while (lo.length >= 2 && cr(lo[lo.length - 2], lo[lo.length - 1], q) <= 0) lo.pop(); lo.push(q); }
+    for (let i = p.length - 1; i >= 0; i--) { const q = p[i]; while (up.length >= 2 && cr(up[up.length - 2], up[up.length - 1], q) <= 0) up.pop(); up.push(q); }
+    up.pop(); lo.pop(); return lo.concat(up);
+  }
+  function tex(g, img, x, y, w, h, s) {
+    if (w < 1 || h < 1) return;
+    let src = img;
+    if (s < 0.97) { const fq = Math.min(9, Math.round(runFogT(s) * 5.5)); src = runMip(img, s, fq, fq ? OTH.fog : ''); }
+    g.drawImage(src, x, y, w, h);
+  }
+  /* box: lateral centre lat, half-width hw (lanes), depth z0..z1, height h0..h1 (px at scale 1). C = {t,l,r,f,ol} */
+  function box(g, lat, hw, z0, z1, h0, h1, C, img, deco) {
+    const fl = pj(lat - hw, z0, h0), fr = pj(lat + hw, z0, h0), ftl = pj(lat - hw, z0, h1), ftr = pj(lat + hw, z0, h1);
+    const bl = pj(lat - hw, z1, h0), br = pj(lat + hw, z1, h0), btl = pj(lat - hw, z1, h1), btr = pj(lat + hw, z1, h1), s = fl[2];
+    if (C.ol !== 0) PG(g, hull([fl, fr, ftl, ftr, bl, br, btl, btr]), ofc(C.ol || '#14121c', s), 1);
+    const sR = btr[0] > ftr[0], sL = btl[0] < ftl[0];
+    if (sR) PG(g, [fr, br, btr, ftr], ofc(C.r, s));
+    if (sL) PG(g, [fl, bl, btl, ftl], ofc(C.l || C.r, s));
+    if (btl[1] < ftl[1]) PG(g, [ftl, ftr, btr, btl], ofc(C.t, s));
+    const fw = fr[0] - fl[0], fh = fl[1] - ftl[1] + 1;
+    if (img) tex(g, img, fl[0], ftl[1], fw, fh, s); else if (fw > 0) R(g, fl[0], ftl[1], fw, fh, ofc(C.f || C.l || C.r, s));
+    if (deco) deco({ fl, fr, ftl, ftr, bl, br, btl, btr, sR, sL, s, q: fl[3] });
+  }
+  /* soft contact shadow + tight ambient-occlusion footprint (light from the top-left: falls back-right) */
+  function foot(g, lat, hw, z0, z1, a) {
+    const ga = g.globalAlpha;
+    g.globalAlpha = ga * a * 0.55; PG(g, [pj(lat - hw - 0.02, z0 - 0.06, 0), pj(lat + hw + 0.14, z0 - 0.06, 0), pj(lat + hw + 0.24, z1 + 0.35, 0), pj(lat - hw + 0.06, z1 + 0.35, 0)], BLK);
+    g.globalAlpha = ga * a; PG(g, [pj(lat - hw - 0.03, z0 - 0.02, 0), pj(lat + hw + 0.05, z0 - 0.02, 0), pj(lat + hw + 0.05, z1 + 0.06, 0), pj(lat - hw - 0.03, z1 + 0.06, 0)], BLK);
+    g.globalAlpha = ga;
+  }
+  /* stacked discs / ellipses along z (reels, tubes, fuselages): fn(i,n) -> [lat, z, hCentre, rx(px), ry(px), colour, hiColour] */
+  function slices(g, n, fn, ol) {
+    const S2 = [];
+    for (let i = 0; i < n; i++) {
+      const d = fn(i, n); if (!d) continue;
+      const p = pj(d[0], d[1], d[2]), q = p[3]; S2.push([d, p, Math.max(1, Math.round(d[3] * q)), Math.max(1, Math.round(d[4] * q))]);
     }
-    else if (o.k === 'H') {
-      const by = fy - 30 * s, img = o.var === 1 ? SPR.pipe : SPR.blade;
-      const ceil = fy - RUN_CEIL * s, w = Math.max(1, Math.round(2 * s));
-      g.globalAlpha = fa; fc(g, runFc(DGR, s, 1, ZT(o.z)));
-      for (const dx of [-17, 17]) g.fillRect(Math.round(x + dx * s - w / 2), Math.round(ceil), w, Math.max(1, Math.round(by - 14 * s - ceil)));
-      g.globalAlpha = 1;
-      blit(g, img, x, by, s, fa, 0.55);
-      shadow(g, x, fy, 20, s, 0.26 * fa);
-    }
-    else if (o.k === 'W') {
-      const xc = px3(0, zr, s, cx), hw = 1.72 * RUN_LW * s, ceil = fy - RUN_CEIL * s, by = fy - 30 * s, th = 16 * s;
-      g.globalAlpha = fa;
-      R(g, xc - hw - 3 * s, ceil, 6 * s + 1, fy - ceil, BLK); R(g, xc + hw - 3 * s, ceil, 6 * s + 1, fy - ceil, BLK);
-      R(g, xc - hw - 2 * s, ceil, Math.max(1, 4 * s), fy - ceil, '#3a8fd8'); R(g, xc + hw - 2 * s, ceil, Math.max(1, 4 * s), fy - ceil, '#3a8fd8');
-      R(g, xc - hw, by - th - 1, hw * 2, th + 2, BLK);
-      const n = 14, sw = (hw * 2) / n;
-      for (let i = 0; i < n; i++) R(g, xc - hw + i * sw, by - th, Math.ceil(sw), th, (i & 1) ? WHT : RED);
-      if (Math.floor(t * 5) & 1) D(g, xc, by - th - 3 * s, Math.max(1, Math.round(3 * s)), '#ff6a6a');
-      g.globalAlpha = 1;
-      shadow(g, xc, fy, 60, s, 0.2 * fa);
+    if (ol) for (const [, p, rx, ry] of S2) E(g, p[0], p[1], rx + 1, ry + 1, ofc(ol, p[2]));
+    for (const [d, p, rx, ry] of S2) {
+      E(g, p[0], p[1], rx, ry, ofc(d[5], p[2]));
+      if (d[6]) E(g, p[0] - Math.round(rx * 0.12), p[1] - Math.round(ry * 0.45), Math.max(1, Math.round(rx * 0.72)), Math.max(1, Math.round(ry * 0.4)), ofc(d[6], p[2]));
     }
   }
+  const line3 = (g, a, b, c, w) => L(g, a[0], a[1], b[0], b[1], ofc(c, a[2]), Math.max(1, Math.round((w || 1) * a[3])));
+  function hchain(g, lat, z, h0, h1) {   /* vertical hoist chain to the ceiling */
+    const a = pj(lat, z, h0), b = pj(lat, z, h1), w = Math.max(1, Math.round(2 * a[3])), lk = Math.max(2, Math.round(4 * a[3]));
+    for (let y = b[1], i = 0; y < a[1]; y += lk, i++) R(g, a[0] - (w >> 1), y, w, Math.min(lk, a[1] - y), ofc(i & 1 ? '#8a93a3' : '#3a3f4a', a[2]));
+  }
+  function hook(g, lat, z, h) {   /* yellow crane hook block */
+    box(g, lat, 0.09, z - 0.05, z + 0.05, h, h + 12, { t: '#ffe45a', l: '#c99a10', r: '#a07800' }, null, null);
+    const p = pj(lat, z - 0.05, h + 6); R(g, p[0] - 1, p[1] - 1, 2, 2, ofc('#3a3a44', p[2]));
+  }
+  const BLUE = { t: '#6ab4f0', l: '#2a72bc', r: '#1b4f8c' }, WOOD = { t: '#e8b880', l: '#b07a42', r: '#7a4f24' }, DARK = { t: '#4a4f5c', l: '#2e323c', r: '#1e2128', f: '#262a32' };
+
+  function drawObs(g, o, cx) {
+    const zr = o.z - pz, s = runS(zr), fa = fadeA(s), X = runObTex(), z0 = o.z;
+    OC = cx; OTH = ZT(o.z); OL = o.k === 'W' ? 0 : o.pair ? o.lane + 0.5 : o.lane; const L0 = OL, v = o.var;
+    g.globalAlpha = fa;
+    if (o.k === 'C') {
+      if (v === 0) {
+        foot(g, L0, 0.42, z0, z0 + 1.1, 0.4);
+        box(g, L0, 0.42, z0, z0 + 1.1, 0, 30, WOOD, X.crate, d => {
+          for (const u of [0.34, 0.67]) { const a = lp(d.ftl, d.ftr, u), b = lp(d.btl, d.btr, u); L(g, a[0], a[1], b[0], b[1], ofc('#b98650', d.s)); }
+          R(g, d.ftl[0], d.ftl[1], d.fr[0] - d.fl[0], 1, ofc('#ffe45a', d.s));
+        });
+      } else if (v === 1) {
+        foot(g, L0, 0.45, z0, z0 + 1.15, 0.4);
+        box(g, L0, 0.45, z0, z0 + 1.15, 0, 6, WOOD, X.palB, null);
+        box(g, L0, 0.41, z0 + 0.04, z0 + 1.1, 6, 30, { t: '#e2c48e', l: '#b48f58', r: '#86683a' }, X.load, d => {
+          const a = lp(d.ftl, d.ftr, 0.5), b = lp(d.btl, d.btr, 0.5); L(g, a[0], a[1], b[0], b[1], ofc('#f2e6c8', d.s));
+          const c2 = lp(d.ftl, d.btl, 0.5), e = lp(d.ftr, d.btr, 0.5); L(g, c2[0], c2[1], e[0], e[1], ofc('#94703e', d.s));
+        });
+      } else {
+        foot(g, L0, 0.46, z0, z0 + 1.2, 0.4);
+        box(g, L0, 0.46, z0, z0 + 1.2, 0, 22, { t: '#6f8452', l: '#4b5a3a', r: '#33402a' }, X.cas, d => {
+          for (const u of [0.13, 0.87]) { const a = lp(d.ftl, d.ftr, u), b = lp(d.btl, d.btr, u); L(g, a[0], a[1], b[0], b[1], ofc('#ffd21a', d.s)); }
+          for (const w of [0.35, 0.7]) { const a = lp(lp(d.ftl, d.btl, w), lp(d.ftr, d.btr, w), 0.4), b = lp(lp(d.ftl, d.btl, w), lp(d.ftr, d.btr, w), 0.6); L(g, a[0], a[1], b[0], b[1], ofc('#22281a', d.s)); }
+        });
+      }
+    }
+    else if (o.k === 'B') {
+      const zc = z0 + 0.45, LEG = '#3a3f4a';
+      foot(g, L0, 0.46, zc - 0.3, zc + 0.3, 0.28);
+      const leg = (lt, dz) => line3(g, pj(lt, zc, 19), pj(lt, zc + dz, 0), LEG, 2);
+      leg(L0 - 0.4, 0.3); leg(L0 + 0.4, 0.3);
+      box(g, L0, 0.47, zc - 0.05, zc + 0.05, 11, 20, { t: '#fff08a', l: '#c9a010', r: '#8a6a00' }, X.bar, null);
+      leg(L0 - 0.4, -0.3); leg(L0 + 0.4, -0.3);
+      if (v === 1) { const p = pj(L0 - 0.36, zc, 24), on = Math.floor(t * 4 + o.z) & 1; D(g, p[0], p[1], Math.max(1, Math.round(3 * p[3])), BLK); D(g, p[0], p[1], Math.max(1, Math.round(2 * p[3])), on ? '#ffb000' : '#8a5a00'); }
+    }
+    else if (o.k === 'R') {
+      const zf = z0 + 0.05, zb = z0 + 1.1;
+      foot(g, L0, 0.38, zf, zb, 0.4);
+      slices(g, 2, i => [L0, zb - i * 0.07, 19, 19, 19, i ? '#7a4f24' : W4C, null], '#14121c');
+      slices(g, 7, (i, n) => [L0, zb - 0.12 - (i / (n - 1)) * (zb - zf - 0.24), 19, 12.5, 12.5, (i & 1) ? '#c85a10' : '#ff8a1a', (i & 1) ? '#ff9a3c' : '#ffb060'], '#3a1a08');
+      slices(g, 2, i => [L0, zf + 0.06 - i * 0.05, 19, 19, 19, i ? '#93602e' : W4C, null], '#14121c');
+      const p = pj(L0, zf, 19), w = Math.max(2, Math.round(38 * p[3]));
+      tex(g, X.reel, p[0] - (w >> 1), p[1] - (w >> 1), w, w, p[2]);
+    }
+    else if (o.k === 'H') {
+      if (v === 1) {   /* tail-boom section hanging from a hoist */
+        const zf = z0 + 0.1, zb = z0 + 1.15, zm = (zf + zb) / 2;
+        hchain(g, L0, zm, 92, RUN_CEIL); hook(g, L0, zm, 80);
+        slices(g, 9, (i, n) => { const u = i / (n - 1), z = zb - u * (zb - zf), r = 14 - 3 * u; return [L0, z, 44, r, r, i === 3 ? '#f4f4f4' : i === 6 ? '#ffd21a' : '#d8342c', i === 3 ? '#ffffff' : i === 6 ? '#fff08a' : '#ff6a5a']; }, '#3a0c0c');
+        for (const zz of [zf + 0.25, zb - 0.25]) { const a = pj(L0 - 0.24, zz, 52), b = pj(L0 + 0.24, zz, 52), c2 = pj(L0, zm, 80); line3(g, a, c2, '#ff8a1a', 2); line3(g, b, c2, '#ff8a1a', 2); }
+        const p = pj(L0, zf, 44), w = Math.max(2, Math.round(22 * p[3]));
+        tex(g, X.ring, p[0] - (w >> 1), p[1] - (w >> 1), w, w, p[2]);
+      } else if (v === 2) {   /* red I-beam on a sling */
+        const za = z0 + 0.35, zb = z0 + 0.75, zm = (za + zb) / 2, RD = { t: '#ff6a5a', l: '#c02a20', r: '#8f2018' };
+        hchain(g, L0, zm, 92, RUN_CEIL); hook(g, L0, zm, 80);
+        for (const sd of [-0.42, 0.42]) line3(g, pj(L0 + sd, zm, 45), pj(L0, zm, 80), '#3a3f4a', 1);
+        box(g, L0, 0.6, za, zb, 30, 33, RD, null, d => { const w = d.fr[0] - d.fl[0], hh = d.fl[1] - d.ftl[1] + 1; runHaz(g, d.fl[0], d.ftl[1], w, hh, ofc('#ffd21a', d.s), ofc('#16141c', d.s), 6); });
+        box(g, L0, 0.6, za + 0.15, zb - 0.15, 33, 42, { t: '#c02a20', l: '#a8241c', r: '#7a1a12', f: '#b02820' }, null, null);
+        box(g, L0, 0.6, za, zb, 42, 45, { t: '#ff7a6a', l: '#c02a20', r: '#8f2018', f: '#e0382c' }, null, null);
+      } else {   /* rotor blade on two straps from the crane */
+        const za = z0 + 0.3, zb = z0 + 0.85, zm = (za + zb) / 2;
+        hchain(g, L0, zm, 92, RUN_CEIL); hook(g, L0, zm, 80);
+        box(g, L0, 0.42, zm - 0.04, zm + 0.04, 70, 74, DARK, null, null);
+        for (const sd of [-0.36, 0.36]) line3(g, pj(L0 + sd, zm, 38), pj(L0 + sd, zm, 71), '#ff8a1a', 2);
+        line3(g, pj(L0 - 0.36, zm, 74), pj(L0, zm, 80), '#3a3f4a', 1); line3(g, pj(L0 + 0.36, zm, 74), pj(L0, zm, 80), '#3a3f4a', 1);
+        box(g, L0, 0.62, za, zb, 30, 38, { t: '#eef2f7', l: '#aeb8c8', r: '#7c8798' }, X.blade, d => {
+          for (const [u0, u1] of [[0, 0.15], [0.85, 1]]) PG(g, [lp(d.ftl, d.ftr, u0), lp(d.ftl, d.ftr, u1), lp(d.btl, d.btr, u1), lp(d.btl, d.btr, u0)], ofc('#ff4a4a', d.s));
+          R(g, d.ftl[0] + 1, d.ftl[1], d.fr[0] - d.fl[0] - 2, 1, ofc('#ffffff', d.s));
+        });
+      }
+    }
+    else if (o.k === 'W') {   /* low girder + pipe run on two portal legs at the lane edges */
+      const za = z0 + 0.2, zb = z0 + 0.5, LG = { t: '#ffb060', l: '#e07010', r: '#a04a08', f: '#ff8a1a' };
+      for (const sd of [-1, 1]) {
+        foot(g, sd * 1.76, 0.14, z0 + 0.05, z0 + 0.65, 0.35);
+        box(g, sd * 1.76, 0.07, za + 0.05, zb - 0.05, 8, 60, LG, null, d => { const hz = pj(sd * 1.76 - 0.07, za + 0.05, 22); runHaz(g, d.fl[0], hz[1], d.fr[0] - d.fl[0], d.fl[1] - hz[1], ofc('#ffd21a', d.s), ofc('#16141c', d.s), 4); });
+        box(g, sd * 1.76, 0.14, z0 + 0.05, z0 + 0.65, 0, 8, DARK, null, null);
+      }
+      box(g, 0, 1.84, za + 0.25, za + 0.31, 46, 52, { t: '#dfe6ee', l: '#8a93a3', r: '#6a7384', f: '#9aa4b2' }, null, d => { R(g, d.ftl[0], d.ftl[1], d.fr[0] - d.fl[0], 1, ofc('#eef2f7', d.s)); });
+      box(g, 0, 1.84, za + 0.15, za + 0.21, 46, 52, { t: '#ffe45a', l: '#c9a010', r: '#8a6a00', f: '#e8c020' }, null, d => { R(g, d.ftl[0], d.ftl[1], d.fr[0] - d.fl[0], 1, ofc('#fff08a', d.s)); });
+      box(g, 0, 1.72, za, zb - 0.1, 30, 46, { t: '#ff7a6a', l: '#c02a20', r: '#8f2018' }, X.gird, null);
+      if (Math.floor(t * 5) & 1) { const p = pj(0, za + 0.1, 55); D(g, p[0], p[1], Math.max(1, Math.round(3 * p[3])), '#ff3a3a'); P(g, p[0] - 1, p[1] - 1, '#ffd0d0'); }
+    }
+    else if (o.k === 'F') {
+      if (o.pair) drawDolly(g, L0, z0);
+      else if (v === 1) drawScissor(g, L0, z0);
+      else drawFork(g, L0, z0, v);
+    }
+    g.globalAlpha = 1;
+  }
+  const W4C = '#4a2e12';
+  function drawFork(g, L0, z0, v) {
+    foot(g, L0, 0.44, z0, z0 + 1.95, 0.42);
+    box(g, L0, 0.42, z0 + 0.62, z0 + 1.95, 6, 34, { t: '#3f8fd8', l: '#2a72bc', r: '#1b4f8c' }, X_().flB, d => {
+      R(g, d.ftl[0], d.ftl[1], d.fr[0] - d.fl[0], 1, ofc('#bfe6ff', d.s));
+      PG(g, [lp(lp(d.ftl, d.btl, 0.62), lp(d.ftr, d.btr, 0.62), 0.12), lp(lp(d.ftl, d.btl, 0.62), lp(d.ftr, d.btr, 0.62), 0.88), lp(d.btl, d.btr, 0.88), lp(d.btl, d.btr, 0.12)], ofc('#1d4f8a', d.s));
+    });
+    box(g, L0, 0.2, z0 + 1.3, z0 + 1.42, 34, 50, DARK, null, null);   /* seat back */
+    box(g, L0, 0.13, z0 + 1.1, z0 + 1.28, 34, 50, { t: '#ffb060', l: '#e07010', r: '#a04a08', f: '#ff8a1a' }, null, d => { R(g, d.ftl[0], d.ftl[1] + Math.round(5 * d.q), d.fr[0] - d.fl[0], Math.max(1, Math.round(2 * d.q)), ofc('#f4f4f4', d.s)); });   /* driver in hi-vis */
+    { const hp = pj(L0, z0 + 1.18, 55); D(g, hp[0], hp[1], Math.max(1, Math.round(4 * hp[3])), ofc('#c98a5a', hp[2])); E(g, hp[0], hp[1] - Math.round(3 * hp[3]), Math.max(1, Math.round(5 * hp[3])), Math.max(1, Math.round(3 * hp[3])), ofc('#ffd21a', hp[2])); }
+    line3(g, pj(L0 - 0.1, z0 + 0.9, 44), pj(L0 + 0.1, z0 + 0.9, 44), '#14121c', 2);
+    for (const sd of [-1, 1]) box(g, L0 + sd * 0.4, 0.07, z0 + 0.66, z0 + 1.02, 0, 13, DARK, null, null);
+    for (const zz of [z0 + 1.72, z0 + 0.78]) for (const sd of [-1, 1]) line3(g, pj(L0 + sd * 0.38, zz, 34), pj(L0 + sd * 0.38, zz, 65), '#3a3f4a', 3);
+    box(g, L0, 0.42, z0 + 0.74, z0 + 1.76, 64, 67, DARK, null, d => {
+      for (const u of [0.25, 0.5, 0.75]) { const a = lp(d.ftl, d.ftr, u), b = lp(d.btl, d.btr, u); L(g, a[0], a[1], b[0], b[1], ofc('#6a7080', d.s)); }
+    });
+    { const p = pj(L0 + 0.26, z0 + 1.5, 71), on = Math.floor(t * 6 + z0) & 1; D(g, p[0], p[1], Math.max(1, Math.round(3 * p[3])), BLK); D(g, p[0], p[1], Math.max(1, Math.round(2 * p[3])), on ? '#ffb000' : '#a05a00'); if (on) { g.globalAlpha *= 0.35; D(g, p[0], p[1], Math.max(2, Math.round(7 * p[3])), '#ffb000'); g.globalAlpha /= 0.35; } }
+    const MS = { t: '#8a93a3', l: '#4a4f5c', r: '#30343e', f: '#4a4f5c' };
+    for (const sd of [-1, 1]) box(g, L0 + sd * 0.3, 0.05, z0 + 0.48, z0 + 0.6, 2, 76, MS, null, d => R(g, d.ftl[0], d.ftl[1], 1, d.fl[1] - d.ftl[1], ofc('#aeb8c8', d.s)));
+    box(g, L0, 0.35, z0 + 0.48, z0 + 0.6, 71, 76, MS, null, null);
+    for (const sd of [-1, 1]) box(g, L0 + sd * 0.18, 0.04, z0 - 0.06, z0 + 0.5, 0, 3, DARK, null, null);
+    box(g, L0, 0.36, z0 + 0.02, z0 + 0.46, 3, 8, WOOD, X_().palS, null);
+    if (v === 2) box(g, L0, 0.33, z0 + 0.05, z0 + 0.44, 8, 30, WOOD, X_().crate, d => R(g, d.ftl[0], d.ftl[1], d.fr[0] - d.fl[0], 1, ofc('#ffe45a', d.s)));
+    else box(g, L0, 0.33, z0 + 0.05, z0 + 0.44, 8, 30, { t: '#e2c48e', l: '#b48f58', r: '#86683a' }, X_().ld, d => { const a = lp(d.ftl, d.ftr, 0.5), b = lp(d.btl, d.btr, 0.5); L(g, a[0], a[1], b[0], b[1], ofc('#94703e', d.s)); });
+  }
+  function drawScissor(g, L0, z0) {
+    const za = z0 + 0.2, zb = z0 + 1.8, ST = '#c7cfdc';
+    foot(g, L0, 0.44, z0 + 0.1, z0 + 1.9, 0.42);
+    for (const zz of [z0 + 1.5, z0 + 0.25]) for (const sd of [-1, 1]) box(g, L0 + sd * 0.38, 0.06, zz, zz + 0.25, 0, 8, DARK, null, null);
+    box(g, L0, 0.4, za, zb, 3, 14, BLUE, X_().scB, null);
+    const hs = [14, 30, 46, 62];
+    for (const sd of [-1, 1]) for (let k = 0; k < 3; k++) {
+      const lt = L0 + sd * 0.33;
+      line3(g, pj(lt, za + 0.15, hs[k]), pj(lt, zb - 0.15, hs[k + 1]), '#262a32', 3); line3(g, pj(lt, zb - 0.15, hs[k]), pj(lt, za + 0.15, hs[k + 1]), '#262a32', 3);
+      line3(g, pj(lt, za + 0.15, hs[k]), pj(lt, zb - 0.15, hs[k + 1]), ST, 1); line3(g, pj(lt, zb - 0.15, hs[k]), pj(lt, za + 0.15, hs[k + 1]), ST, 1);
+    }
+    box(g, L0, 0.44, z0 + 0.1, z0 + 1.9, 62, 66, BLUE, X_().scP, null);
+    box(g, L0 + 0.24, 0.08, z0 + 0.25, z0 + 0.4, 66, 76, DARK, null, d => P(g, d.ftl[0] + 1, d.ftl[1] + 2, ofc('#00e436', d.s)));
+    const RL = '#e8eef5', P0 = [[-1, z0 + 0.14], [1, z0 + 0.14], [1, z0 + 1.86], [-1, z0 + 1.86]];
+    for (const h of [76, 86]) for (let i = 0; i < 4; i++) { const a = P0[i], b = P0[(i + 1) % 4]; line3(g, pj(L0 + a[0] * 0.42, a[1], h), pj(L0 + b[0] * 0.42, b[1], h), i === 0 ? RL : '#aeb8c8', 1); }
+    for (const a of P0) line3(g, pj(L0 + a[0] * 0.42, a[1], 66), pj(L0 + a[0] * 0.42, a[1], 86), a[1] < z0 + 1 ? RL : '#aeb8c8', 1);
+  }
+  function drawDolly(g, Lc, z0) {
+    const TH = OTH, hb = TH.heli[0], ha = TH.heli[1];
+    foot(g, Lc, 0.98, z0, z0 + 2.0, 0.42);
+    for (const zz of [z0 + 1.55, z0 + 0.15]) for (const sd of [-1, 1]) box(g, Lc + sd * 0.86, 0.07, zz, zz + 0.3, 0, 9, DARK, null, null);
+    box(g, Lc, 0.95, z0 + 0.05, z0 + 1.95, 3, 12, BLUE, X_().dol, null);
+    for (const zz of [z0 + 1.4, z0 + 0.45]) box(g, Lc, 0.42, zz, zz + 0.15, 12, 22, { t: '#3a4a7a', l: '#22305a', r: '#141c3a', f: '#1d2b53' }, null, null);
+    box(g, Lc, 0.03, z0 + 1.78, z0 + 1.96, 44, 74, { t: ha, l: ha, r: runMix(ha, '#000000', 0.35), f: ha }, null, null);
+    /* fuselage: tail boom -> cabin -> nose, stacked back to front */
+    const n = clamp(Math.round(14 * pj(Lc, z0, 0)[3]) + 4, 5, 16), zt = z0 + 1.95, zn = z0 + 0.2, hil = runMix(hb, '#ffffff', 0.55);
+    slices(g, n, (i) => {
+      const u = i / (n - 1), z = zt - u * (zt - zn);
+      if (u < 0.3) { const k = u / 0.3; return [Lc, z, 48 - 4 * k, 7 + 6 * k, 6 + 5 * k, hb, hil]; }
+      if (u > 0.86) { const k = (u - 0.86) / 0.14; return [Lc, z, 40 - 2 * k, 28 - 8 * k * k, 21 - 6 * k * k, hb, hil]; }
+      return [Lc, z, 40, 28, 21, hb, hil];
+    }, '#14121c');
+    const p = pj(Lc, zn, 38), q = p[3], rq = v => Math.max(1, Math.round(v * q));
+    E(g, p[0], p[1] - rq(5), rq(20), rq(9), ofc('#14121c', p[2])); E(g, p[0], p[1] - rq(5), rq(19), rq(8), ofc('#24365e', p[2]));   /* bubble canopy */
+    E(g, p[0] - rq(9), p[1] - rq(8), rq(6), rq(2), ofc('#6fa8dc', p[2])); P(g, p[0] - rq(12), p[1] - rq(9), ofc('#d4ecff', p[2]));
+    R(g, p[0], p[1] - rq(12), Math.max(1, Math.round(q)), rq(18), ofc('#14121c', p[2]));
+    R(g, p[0] - rq(19), p[1] + rq(8), rq(38), rq(2), ofc(ha, p[2]));   /* cheat line */
+    D(g, p[0], p[1] + rq(13), rq(2), ofc('#fff6c0', p[2]));
+    box(g, Lc, 0.05, z0 + 0.8, z0 + 0.92, 60, 70, DARK, null, null);
+    for (const sd of [-1, 1]) line3(g, pj(Lc + sd * 0.05, z0 + 0.86, 71), pj(Lc + sd * 0.3, z0 + 1.95, 66), '#2e323c', 2);
+    const hb2 = pj(Lc, z0 + 0.86, 71); D(g, hb2[0], hb2[1], Math.max(1, Math.round(3 * hb2[3])), ofc('#3a3f4a', hb2[2]));
+  }
+  const X_ = () => runObTex();
+  /* warm the obstacle mip/fog caches a little each frame (time-boxed) so first sightings don't hitch */
+  const warmQ = [];
+  { const X = runObTex(), imgs = Object.keys(X).map(k => X[k]), l0 = Math.round(Math.log(RUN_SMIN * 0.95) * RUN_LQ), l1 = Math.round(Math.log(0.96) * RUN_LQ);
+    for (let zn = 0; zn < 4; zn++) { const fog = RUN_THEMES[(s0 + zn) % 4].fog;
+      for (let li = l0; li <= l1; li++) { const ss = Math.exp(li / RUN_LQ), fq = Math.min(9, Math.round(runFogT(ss) * 5.5)); if (zn && !fq) continue; for (const im of imgs) warmQ.push([im, ss, fq, fq ? fog : '']); } } }
+  function warm() { const t0 = performance.now(); while (warmQ.length && performance.now() - t0 < 1.2) { const w = warmQ.shift(); runMip(w[0], w[1], w[2], w[3]); } }
   function drawCoin(g, c, i, cx) {
     const zr = c.z - pz, s = runS(zr), fy = runFy(s), x = px3(c.lane, zr, s, cx), fa = fadeA(s), SPR = sprAt(c.z);
     const f = (Math.floor(t * 9) + i) & 3, y = fy - (c.h + 6) * s;
@@ -6196,7 +6486,7 @@ function makeRunner(seed, skin) {
 
   /* ---------- main draw ---------- */
   me.draw = g => {
-    setCam(); const cx = cam(), TZn = ZT(pz + 14), bgi = zth(pz + 14);
+    setCam(); warm(); const cx = cam(), TZn = ZT(pz + 14), bgi = zth(pz + 14);
     g.save(); g.imageSmoothingEnabled = false;
     R(g, 0, 0, VW, VH, TZn.out ? '#1d2b53' : TZn.ceilD);
     g.translate(Math.round(shx), Math.round(shy));

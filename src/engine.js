@@ -328,12 +328,18 @@ const Stage = (function () {
     T(g, d.name, VW / 2, 38, acc, { al: 'c', s: tw(d.name, 3) <= 176 ? 3 : 2, sh: BLK });
     T(g, d.tag, VW / 2, 66, WHT, { al: 'c' });
     panel(g, 12, 86, 168, 160, acc);
-    let y = 98;
+    // wrap anything wider than the panel, then tighten line spacing if the card would overflow
+    const rows = [];
     d.how.forEach(l => {
-      if (l === '') { y += 6; return; }
-      const head = l[0] === '>';
-      T(g, head ? l.slice(1) : l, 20, y, head ? YEL : WHT); y += head ? 12 : 10;
+      if (l === '') { rows.push({ gap: 6 }); return; }
+      const head = l[0] === '>', txt = head ? l.slice(1) : l, lines = []; let cur = '';
+      txt.split(' ').forEach(w => { const nx = cur ? cur + ' ' + w : w; if (tw(nx) > 158 && cur) { lines.push(cur); cur = w; } else cur = nx; });
+      if (cur) lines.push(cur);
+      lines.forEach((ln, i) => rows.push({ s: ln, head: head, gap: head && i === lines.length - 1 ? 12 : 10 }));
     });
+    const need = rows.reduce((a, r) => a + r.gap, 0), k = Math.min(1, 142 / Math.max(1, need));
+    let y = 97;
+    rows.forEach(r => { if (r.s) T(g, r.s, 20, Math.round(y), r.head ? YEL : WHT); y += Math.max(r.s ? 8 : 2, r.gap * k); });
     bigBtn(g, 'START', BTN, t, acc === RED ? RED : GRN);
     T(g, 'MENU', QUIT.x + QUIT.w / 2, QUIT.y + 6, LGR, { al: 'c' });
   }

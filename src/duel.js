@@ -532,7 +532,7 @@ function makeDuel(seed, skin) {
 }
 const DEF_DUEL = {
   name: 'DUEL', short: 'Duel', series: { name: 'FIGHTING', icon: 'swords' }, tag: 'ONE STRIKE', color: RED, make: makeDuel,
-  how: ['>READ', 'ONE CLEAN HIT KILLS.', 'WATCH THE BLADE: ITS HEIGHT', 'IS THE STANCE. GLINT = REAL.', '>DEFEND', 'GUARD IN THE SAME STANCE', 'TO PARRY, THEN STRIKE FREE.', 'WRONG STANCE = CUT DOWN.', '>MOVE', 'STEP BACK TO WHIFF THEM,', 'THEN PUNISH. WHIFFS COST.', '>FIVE DUELS, 75 SECONDS', 'FAST KILLS + STREAK = SCORE.']
+  how: ['>READ', 'ONE CLEAN HIT KILLS.', 'BLADE HEIGHT = STANCE.', 'A GLINT MEANS IT IS REAL.', '>DEFEND', 'GUARD IN THE SAME STANCE', 'TO PARRY, THEN STRIKE.', 'WRONG STANCE = CUT DOWN.', '>MOVE', 'STEP BACK TO MAKE THEM', 'MISS, THEN PUNISH.', '>FIVE DUELS, 75 SECONDS', 'FAST KILLS + STREAK = SCORE.']
 };
 DEF_DUEL.art = function (g, x, y, w, h) {
   /* sunset duel: banded sky, huge sun, two silhouettes clashing on a ridge, sparks at the crossing */

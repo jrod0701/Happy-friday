@@ -138,7 +138,11 @@ function kongStage(seed, skin, opts) {
 
   me.press = id => {
     if (id === 'left') hl = true; else if (id === 'right') hr = true; else if (id === 'up') hu = true; else if (id === 'down') hd = true;
-    else if (id === 'jump') jumpBuf = 0.12;
+    else if (id === 'jump') {
+      const h = hero;
+      if (h.hammer > 0 && h.st !== 'dead') { h.hammer = 0; pop(h.x, h.y - 22, 'TOSSED', LGR); SFX.swish(); burst(h.x + h.face * 6, h.y - 14, [LGR, WHT, BRN], 6); }
+      else jumpBuf = 0.12;
+    }
   };
   me.release = id => { if (id === 'left') hl = false; else if (id === 'right') hr = false; else if (id === 'up') hu = false; else if (id === 'down') hd = false; };
 
@@ -199,6 +203,7 @@ function kongStage(seed, skin, opts) {
     const h = hero; h.t += dt;
     const dir = (hr ? 1 : 0) - (hl ? 1 : 0);
     if (h.hammer > 0) { h.hammer -= dt; if (h.hammer < 0) h.hammer = 0; }
+    { const jb = me.buttons && me.buttons.find(b => b.id === 'jump'); if (jb) jb.label = h.hammer > 0 ? 'TOSS' : 'JUMP'; }
     if (h.st === 'dead') {
       h.dead += dt; h.vy += 400 * dt; h.y += h.vy * dt * (h.dead > 0.35 ? 1 : 0.3); h.spin += dt * 12;
       if (h.dead > 1.5) { if (lives <= 0) { me.over = true; overT = 0; endMsg = 'GAME OVER'; } else respawn(); }
@@ -694,7 +699,7 @@ function makeKong(seed, skin) {
 
 const DEF_KONG = {
   name: 'KONG', short: 'Kong', series: { name: 'ACTION', icon: 'ladder' }, tag: 'GIRDER CLIMB', color: YEL, make: makeKong,
-  how: ['>CLIMB', 'REACH THE TOP AND RESCUE', 'THE CAPTIVE. CLEAR A STAGE', 'AND THE NEXT ONE STARTS:', 'GIRDERS, BELTS, LIFTS,', 'RIVETS. BEAT THE CLOCK.', '>JUMP', 'THE ARC IS LOCKED IN THE', 'AIR. HOP BARRELS +100.', 'FALLING FAR IS FATAL.', '>HAMMER', 'SMASH STUFF +300. THEN', 'BEAT THE BONUS CLOCK.']
+  how: ['>CLIMB', 'REACH THE TOP AND RESCUE', 'THE CAPTIVE. CLEAR A STAGE', 'AND THE NEXT ONE STARTS:', 'GIRDERS, BELTS, LIFTS,', 'RIVETS. BEAT THE CLOCK.', '>JUMP', 'THE ARC IS LOCKED IN THE', 'AIR. HOP BARRELS +100.', 'FALLING FAR IS FATAL.', '>HAMMER', 'SMASH STUFF +300.', 'TAP JUMP TO TOSS IT.']
   ,
   art(g, x, y, w, h) {
     /* night sky, big moon behind the brute, red truss girders, hero leaping a barrel */

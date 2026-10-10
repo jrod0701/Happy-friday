@@ -323,7 +323,7 @@ function makeSniper(seed, skin) {
 }
 const DEF_SNIPER = {
   name: 'LONG SHOT', short: 'Long Shot', series: { name: 'TARGET', icon: 'target' }, tag: 'ROOFTOP SNIPER', color: SKY, make: makeSniper,
-  how: ['>SCAN', 'DRAG TO MOVE THE SCOPE.', 'RADAR + RED ARROW POINT TO', 'THE NEXT TARGET.', 'RED = HOSTILE. BLUE = CIVILIAN.', '>STEADY', 'HOLD A FINGER STILL TO', 'SETTLE YOUR BREATH.', '>SHOOT', 'TAP FIRE. HEAD = BIG POINTS.', 'MOVING TARGETS: LEAD THEM.', 'DO NOT SHOOT CIVILIANS.']
+  how: ['>SCAN', 'DRAG TO MOVE THE SCOPE.', 'THE RADAR AND RED ARROW', 'POINT TO THE NEXT TARGET.', 'RIFLE = HOSTILE.', 'HANDS UP = CIVILIAN.', '>STEADY', 'HOLD A FINGER STILL TO', 'SETTLE YOUR BREATH.', '>SHOOT', 'TAP FIRE. HEADSHOT = BONUS.', 'LEAD MOVING TARGETS.', 'NEVER SHOOT CIVILIANS.']
 };
 DEF_SNIPER.art = function (g, x, y, w, h) {
   R(g, x, y, w, h, BLK);

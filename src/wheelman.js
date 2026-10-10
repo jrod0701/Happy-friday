@@ -467,7 +467,7 @@ function makeWheelman(seed, skin) {
 }
 const DEF_WHEELMAN = {
   name: 'FARE RUSH', short: 'Fare Rush', series: { name: 'DRIVING', icon: 'siren' }, tag: 'TAXI MADNESS', color: YEL, make: makeWheelman,
-  how: ['>DRIVE', 'GAS TO GO, BRAKE TO STOP', 'OR REVERSE. STEER YOURSELF.', '>FARES', 'STOP IN THE GREEN RING TO', 'PICK UP. FOLLOW THE ARROW', 'AND THE MAP TO THE DROP.', 'FASTER DROP = BIGGER TIP.', '>EXTRAS', 'DRIFT, JUMP RAMPS, MISS CARS', 'BY A HAIR. CRASH = LOSE CHAIN.', 'EACH DROP ADDS TIME.'],
+  how: ['>DRIVE', 'GAS TO GO, BRAKE TO STOP', 'OR REVERSE. STEER YOURSELF.', '>FARES', 'STOP IN THE GREEN RING TO', 'PICK UP. FOLLOW THE ARROW', 'AND THE MAP TO THE DROP.', 'FASTER DROP = BIGGER TIP.', '>EXTRAS', 'DRIFT, JUMP RAMPS, MISS CARS', 'BY A HAIR. CRASH = NO CHAIN.', 'EACH DROP ADDS TIME.'],
   art(g, x, y, w, h) {
     g.save(); g.beginPath(); g.rect(x, y, w, h); g.clip();
     /* dusk sky in dithered bands */
