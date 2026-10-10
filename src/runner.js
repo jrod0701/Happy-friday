@@ -5,11 +5,12 @@
 const RUN_TEXT = {
   factory: 'ROTOR WORKS',   /* hanging banner over the floor */
   hangar: 'HANGAR 7',       /* second banner */
-  clock: 'CLOCK-IN',        /* HUD shift bar label */
-  gate: 'TIME CLOCK',       /* finish gate sign */
+  job: 'HOT JOB',           /* HUD rush-order meter label */
+  gate: 'LOADING DOCK',     /* finish gate sign */
   steward: 'STEWARD',       /* cameo label (summary only) */
-  win: 'CLOCKED IN!',
-  lose: 'LATE AGAIN!'
+  boss: 'FOREMAN',          /* the pursuer */
+  win: 'ORDER SHIPPED!',
+  lose: 'CAUGHT!'
 };
 /* -------------------------------------------------------------------------------------- */
 
@@ -42,9 +43,11 @@ function runMix(a, b, t) {
 }
 let RUN_TH = RUN_THEMES[0];
 function runFogT(s) { const f = clamp((0.4 - s) / 0.33, 0, 1); return Math.pow(f, 1.2) * 0.9; }
-function runFc(c, s, k) { return runMix(c, RUN_TH.fog, runFogT(s) * (k == null ? 1 : k)); }
+function runFc(c, s, k, th) { return runMix(c, (th || RUN_TH).fog, runFogT(s) * (k == null ? 1 : k)); }
 const runS = zr => RUN_DC / (RUN_DC + zr);
-const runFy = s => RUN_HZ + RUN_K * s;
+let rzH = RUN_HZ, rzK = RUN_K, rzC = RUN_CH;   /* camera horizon / height, varied per frame for hills */
+const runFy = s => rzH + rzK * s;
+let RUN_BEST = 0, RUN_BESTD = 0;                  /* best this session */
 
 /* ---------- nominal speed model (generator uses it; real speed = nominal * stumble penalty) ---------- */
 function runVt(t) { return RUN_V0 + (RUN_V1 - RUN_V0) * Math.min(1, t / RUN_CAP); }
@@ -99,7 +102,15 @@ const RUN_LIB = [
   { d: 0.35, w: 2, r: [[0, '.H.'], [1.0, 'C..'], [1.0, '..F']] }, { d: 0.4, w: 2, r: [[0, 'FC.'], [1.0, '.CF'], [1.0, 'F.C']] },
   { d: 0.45, w: 2, r: [[0, '.C.'], [0.95, '.H.'], [0.95, '.C.']] }, { d: 0.5, w: 2, r: [[0, 'HF.'], [0.95, '.FH'], [0.95, 'H.F']] },
   { d: 0.5, w: 2, r: [[0, 'BBB'], [0.9, 'WWW'], [0.9, 'BBB']] }, { d: 0.55, w: 2, r: [[0, 'F..'], [0.9, '.F.'], [0.9, '..F'], [0.9, '.F.']] },
-  { d: 0.6, w: 2, r: [[0, 'FF.'], [0.95, '..H'], [0.95, 'C.F']] }, { d: 0.65, w: 2, r: [[0, 'PPP'], [0.9, 'WWW'], [0.9, 'F.F']] }
+  { d: 0.6, w: 2, r: [[0, 'FF.'], [0.95, '..H'], [0.95, 'C.F']] },
+  /* named set-pieces */
+  { d: 0.2, w: 2, r: [[0, '.P.'], [0.95, '.C.'], [0.95, '.P.'], [0.95, '.C.']] },                       /* pit-and-crate rhythm */
+  { d: 0.3, w: 2, r: [[0, 'FF.'], [0.95, 'F.F'], [0.95, '.FF'], [0.95, 'F.F']] },                       /* forklift highway */
+  { d: 0.35, w: 2, r: [[0, 'WWW'], [1.0, 'WWW'], [1.0, 'WWW']] },                                       /* rotor-blade slide corridor */
+  { d: 0.4, w: 2, r: [[0, 'FF.'], [1.0, '.FF'], [1.0, 'FF.']] },                                        /* two-lane squeeze */
+  { d: 0.5, w: 2, r: [[0, 'BBB'], [0.85, 'BBB'], [0.85, 'BBB']] },                                      /* low bridge hops */
+  { d: 0.55, w: 2, r: [[0, '.F.'], [0.9, 'F..'], [0.9, '..F'], [0.9, 'F..']] },                         /* slalom */
+  { d: 0.8, w: 3, r: [[0, 'PPP'], [0.85, 'WWW'], [0.85, 'FF.'], [0.85, '.CF']] },                       /* gauntlet */ { d: 0.65, w: 2, r: [[0, 'PPP'], [0.9, 'WWW'], [0.9, 'F.F']] }
 ];
 const RUN_ATOMS = ['.C.', 'C..', '..C', 'C.C', 'BBB', 'H..', '.H.', '..H', 'H.H', 'F..', '.F.', '..F', 'FF.', '.FF', 'F.F', 'WWW', 'R..', '.R.', '..R', '.P.', 'PPP', 'CCC', 'FC.', '.CF'];
 
@@ -111,7 +122,7 @@ function runRow(str, flip) {
 
 /* Deterministic course: everything is generated up-front from the seed (distance-addressed), so same seed => same course. */
 function runGen(seed) {
-  const r = rng((seed ^ 0x9e3779b1) >>> 0), rows = [], coins = [], stew = [], puddles = [];
+  const r = rng((seed ^ 0x9e3779b1) >>> 0), rows = [], coins = [], stew = [], puddles = [], pups = [];
   const ZEND = runZt(RUN_CAP * 1.15) + 120, STEW_T = [20, 41, 62];
   let z = 72, prevZ = 0, states = [[1, null]], pathLane = 1, si = 0;
   const addCoin = (lane, cz, h) => coins.push({ lane: lane, z: cz, h: h || 8, got: false, gate: -1 });
@@ -127,6 +138,12 @@ function runGen(seed) {
       stew.push({ z: z + 4, side: side });
       trail(z + 8, z + 8 + v * 1.7, pathLane, nl, 2.3);
       z += v * 2.0 + 10; pathLane = nl; states = [[0, null], [1, null], [2, null]]; prevZ = z - v * 1.5; si++; continue;
+    }
+    /* coin river: an obstacle-free ribbon of quarters weaving across the lanes */
+    if (D > 0.12 && r() < 0.09) {
+      const z0 = z + 1.1 * v, len = 2.4 * v, ph = r() * 6; let k = 0;
+      for (let cz = z0; cz < z0 + len; cz += 1.9, k++) addCoin(clamp(Math.sin(k * 0.55 + ph) * 1.05, -1, 1), cz);
+      z = z0 + len; states = [[0, null], [1, null], [2, null]]; prevZ = z - 1.2 * v; pathLane = 1; continue;
     }
     /* choose a segment: library or random chain; reject unsolvable ones */
     const rest = lerp(1.9, 0.95, D) + r() * 0.45, m = lerp(1.3, 0.7, D);
@@ -164,6 +181,12 @@ function runGen(seed) {
       lastZ = row.z; lastL = q[0];
       rows.push(row);
     }
+    /* power-up in a risk/reward spot: a free lane beside the hazard row */
+    if (r() < 0.2) {
+      const i = Math.floor(r() * seg.rows.length), row = seg.rows[i], q = path[i];
+      const free = [0, 1, 2].filter(l => !row.c[l] && (!q || l !== q[0]));
+      if (free.length) pups.push({ kind: 'MSXB'[Math.floor(r() * 4)], lane: free[Math.floor(r() * free.length)] - 1, z: row.z + 0.4, got: false });
+    }
     /* harmless puddles in the breathers */
     if (D > 0.04 && r() < 0.4) { const pzz = (prevZ + seg.rows[0].z) / 2, l = Math.floor(r() * 3); if (seg.rows[0].z - prevZ > 22) puddles.push({ z: pzz, lane: l }); }
     prevZ = lastZ; z = lastZ; states = seg.end; pathLane = path.length ? path[path.length - 1][0] : 1;
@@ -187,7 +210,8 @@ function runGen(seed) {
   /* opening cameo trail: the steward sprints ahead dropping these (revealed as he passes them) */
   for (let cz = 30; cz < 66; cz += 2.4) coins.push({ lane: 0, z: cz, h: 8, got: false, gate: 1 });
   coins.sort((a, b) => a.z - b.z);
-  return { rows: rows, objs: objs, coins: coins, stew: stew, end: ZEND };
+  pups.sort((a, b) => a.z - b.z);
+  return { rows: rows, objs: objs, coins: coins, stew: stew, pups: pups, end: ZEND };
 }
 
 /* ---------- offscreen sprites ---------- */
@@ -317,7 +341,7 @@ function runSprites(th) {
   }));
   S.gate = runCv(150, 40, g => {
     R(g, 0, 0, 150, 40, BLK); R(g, 2, 2, 146, 36, '#27527e'); runHaz(g, 2, 2, 146, 5, YEL, BLK, 10); runHaz(g, 2, 33, 146, 5, YEL, BLK, 10);
-    T(g, RUN_TEXT.gate, 75, 12, WHT, { al: 'c', sh: BLK }); R(g, 56, 22, 38, 9, BLK); R(g, 58, 24, 34, 5, '#00e436'); T(g, 'IN', 75, 23, BLK, { al: 'c' });
+    T(g, RUN_TEXT.gate, 75, 12, WHT, { al: 'c', sh: BLK }); R(g, 56, 22, 38, 9, BLK); R(g, 58, 24, 34, 5, '#00e436'); T(g, 'GO', 75, 23, BLK, { al: 'c' });
   });
   S.stewW = [0, 1].map(f => runCv(26, 42, g => {
     R(g, 8, 32, 4, 10, BLK); R(g, 14, 32, 4, 10, BLK); R(g, 9, 32, 2, 9, '#27527e'); R(g, 15, 32, 2, 9, '#27527e'); R(g, 7, 40, 6, 2, '#222222'); R(g, 14, 40, 6, 2, '#222222');
@@ -333,6 +357,33 @@ function runSprites(th) {
     R(g, 3, 15 + f * 3, 3, 11, '#2a63a8'); R(g, 20, 15 + (1 - f) * 3, 3, 11, '#2a63a8');
     D(g, 13, 8, 5, BLK); D(g, 13, 8, 4, '#6b3a1a'); R(g, 7, 2, 12, 4, BLK); R(g, 8, 2, 10, 3, WHT); R(g, 5, 5, 16, 2, WHT);
   }));
+  const pupBase = (g, c) => { D(g, 10, 10, 10, BLK); D(g, 10, 10, 9, c); D(g, 10, 10, 7, 'rgba(255,255,255,0.28)'); };
+  S.pup = {
+    M: runCv(20, 20, g => { pupBase(g, '#ff4d6d'); R(g, 5, 4, 3, 9, '#e8e8f0'); R(g, 12, 4, 3, 9, '#e8e8f0'); R(g, 5, 11, 10, 4, BLK); R(g, 6, 11, 8, 3, '#2a63e8'); R(g, 5, 4, 3, 3, '#ff2a40'); R(g, 12, 4, 3, 3, '#ff2a40'); }),
+    S: runCv(20, 20, g => { pupBase(g, '#29adff'); E(g, 10, 11, 6, 5, BLK); E(g, 10, 11, 5, 4, YEL); R(g, 3, 12, 14, 3, BLK); R(g, 4, 12, 12, 2, ORG); R(g, 9, 5, 2, 5, WHT); }),
+    X: runCv(20, 20, g => { pupBase(g, '#ff7a1a'); R(g, 4, 6, 12, 10, BLK); R(g, 5, 7, 10, 8, WHT); R(g, 5, 7, 10, 2, '#6b3a1a'); T(g, 'X2', 5, 9, BLK); R(g, 16, 8, 2, 5, BLK); R(g, 4, 4, 2, 2, '#ffffff'); R(g, 9, 2, 2, 3, '#ffffff'); }),
+    B: runCv(20, 20, g => { pupBase(g, '#ffd21a'); PG(g, [[12, 3], [5, 11], [9, 11], [7, 17], [15, 8], [10, 8]], '#ff4d00'); PG(g, [[11, 4], [6, 10], [10, 10], [8, 15], [14, 8], [9, 8]], '#fff1a0'); })
+  };
+  S.foreman = [0, 1].map(f => runCv(44, 58, g => {
+    R(g, 10, 46 + f * 2, 9, 12 - f * 2, BLK); R(g, 25, 46 + (1 - f) * 2, 9, 12 - (1 - f) * 2, BLK); R(g, 11, 46 + f * 2, 7, 10 - f * 2, '#27527e'); R(g, 26, 46 + (1 - f) * 2, 7, 10 - (1 - f) * 2, '#27527e');
+    E(g, 22, 36, 17, 14, BLK); E(g, 22, 36, 16, 13, '#f2f2f2'); R(g, 20, 24, 4, 20, '#c8372d'); R(g, 19, 24, 6, 3, '#8f2018');
+    R(g, 4, 20, 7, 18, BLK); R(g, 5, 21, 5, 16, '#f2f2f2'); R(g, 3, 14 - f * 3, 7, 7, PEACH); R(g, 2, 13 - f * 3, 9, 3, BLK);
+    R(g, 32, 12 + f * 2, 12, 16, BLK); R(g, 33, 13 + f * 2, 10, 14, '#c9a46a'); R(g, 34, 15 + f * 2, 8, 1, DGR); R(g, 34, 18 + f * 2, 8, 1, DGR); R(g, 34, 21 + f * 2, 6, 1, DGR); R(g, 36, 11 + f * 2, 4, 3, LGR);
+    R(g, 31, 22, 4, 10, '#f2f2f2'); R(g, 31, 14 + f * 2, 4, 4, PEACH);
+    D(g, 22, 15, 9, BLK); D(g, 22, 15, 8, PEACH); R(g, 14, 13, 7, 2, BLK); R(g, 23, 13, 7, 2, BLK); L(g, 14, 11, 20, 14, BLK); L(g, 30, 11, 24, 14, BLK);
+    R(g, 17, 15, 3, 3, WHT); R(g, 25, 15, 3, 3, WHT); R(g, 18, 16, 2, 2, BLK); R(g, 26, 16, 2, 2, BLK);
+    R(g, 17, 20, 12, 2, '#6b3a1a'); R(g, 18, 23, 10, 4, BLK); R(g, 19, 24, 8, 2, '#c8372d');
+    E(g, 22, 7, 11, 6, BLK); E(g, 22, 7, 10, 5, '#e03a3a'); R(g, 12, 9, 20, 3, BLK); R(g, 13, 9, 18, 2, '#ff6a6a'); R(g, 20, 1, 4, 5, WHT);
+  }));
+  S.sign = runCv(22, 44, g => {
+    R(g, 10, 20, 3, 24, BLK); R(g, 11, 20, 1, 24, DGR);
+    PG(g, [[11, 0], [21, 10], [11, 20], [1, 10]], BLK); PG(g, [[11, 2], [19, 10], [11, 18], [3, 10]], '#ffd21a');
+    R(g, 5, 9, 12, 3, BLK); R(g, 7, 12, 8, 2, '#ff6a1a'); R(g, 10, 4, 2, 4, BLK);
+  });
+  S.zone = runCv(150, 30, g => {
+    R(g, 0, 0, 150, 30, BLK); R(g, 2, 2, 146, 26, TH.pil); R(g, 2, 2, 146, 3, TH.kA); R(g, 2, 25, 146, 3, TH.kA);
+    T(g, TH.n, 75, 11, WHT, { al: 'c', sh: BLK });
+  });
   RUN_SPR[th] = S; return S;
 }
 
@@ -367,30 +418,44 @@ function runBg(th) {
 
 /* =========================================================================================== */
 function makeRunner(seed, skin) {
-  const thi = hash2(seed, 77) % 4, TH = RUN_THEMES[thi]; RUN_TH = TH;
-  const SPR = runSprites(thi), BG = runBg(thi);
-  const gen = runGen(seed), objs = gen.objs, coins = gen.coins, stews = gen.stew, rowsG = gen.rows;
+  const s0 = hash2(seed, 77) % 4, ZLEN = 450;
+  const zi = z => Math.floor(Math.max(0, z) / ZLEN), zth = z => (s0 + zi(z)) % 4, ZT = z => RUN_THEMES[zth(z)], sprAt = z => runSprites(zth(z));
+  RUN_TH = ZT(0);
+  const gen = runGen(seed), objs = gen.objs, coins = gen.coins, stews = gen.stew, rowsG = gen.rows, pups = gen.pups;
   const me = { score: 0, ended: false, over: false, settle: true, buttons: [] };
   const KEYS = [['kL', ['ArrowLeft', 'KeyA'], 'left'], ['kR', ['ArrowRight', 'KeyD'], 'right'], ['kU', ['ArrowUp', 'KeyW', 'Space'], 'jump'], ['kD', ['ArrowDown', 'KeyS'], 'slide']];
   KEYS.forEach(k => me.buttons.push({ id: k[0], x: -300, y: 0, w: 4, h: 4, key: k[1] }));   /* off-screen: keyboard only */
   const KMAP = {}; KEYS.forEach(k => KMAP[k[0]] = k[2]);
+  const ph1 = (hash2(seed, 3) % 628) / 100, ph2 = (hash2(seed, 4) % 628) / 100, ph3 = (hash2(seed, 5) % 628) / 100, ph4 = (hash2(seed, 6) % 628) / 100;
 
   /* ---- state ---- */
-  let t = 0, pz = 0, px = 0, tl = 0, yj = 0, vy = 0, slideT = 0, slideAge = 9, pen = 0, lives = 3, inv = 0, stumbleT = 0, shake = 0, shx = 0, shy = 0;
-  let quarters = 0, chain = 0, chainT = 0, bestChain = 0, nearMiss = 0, bonusPts = 0, overT = 0, endMsg = '', won = false, flash = 0, flashC = '#fff', milestone = 0, mTxt = 0, mm = 500;
-  let bufJ = 0, bufS = 0, qSlide = false, stepPh = 0, lastStep = 0, lastStepT = 0, hintT = 0, oi = 0, ci = 0, v = RUN_V0, hits = 0, gateZ = -1, sf = 0;
-  const hitLog = [];
-  const acts = { left: 0, right: 0, jump: 0, slide: 0 };
+  let t = 0, pz = 0, px = 0, fromL = 0, tl = 0, mt = 1, cl = 0, lastLaneT = -9, lastFrom = 0;
+  let yj = 0, vy = 0, slideT = 0, slideAge = 9, pen = 0, inv = 0, stumbleT = 0, shake = 0, shx = 0, shy = 0;
+  let near = 0, caught = false, shield = false, magnetT = 0, x2T = 0, boostT = 0, boostGrace = 0, lagX = 0, bossPh = 0, bossT = 0;
+  let quarters = 0, chain = 0, chainT = 0, bestChain = 0, nearMiss = 0, bonusPts = 0, overT = 0, endMsg = '', won = false, flash = 0, flashC = '#fff', milestone = 0, mTxt = 0, mm = 500, zoneNow = 0, bestFlag = false, newBest = false;
+  let bufJ = 0, bufS = 0, qSlide = false, stepPh = 0, lastStep = 0, lastStepT = 0, hintT = 0, oi = 0, ci = 0, pi = 0, v = RUN_V0, hits = 0, gateZ = -1, sf = 0, bossStep = 0;
+  const laneQ = [], hitLog = [], acts = { left: 0, right: 0, jump: 0, slide: 0, tap: 0 };
   const parts = [], pops = [], lines = [];
   for (let i = 0; i < 16; i++) lines.push({ a: (hash2(i, seed) % 628) / 100, r: (hash2(i, 9) % 100) * 1.5 });
   const rnd = rng(seed ^ 0x55aa);
   const cam = () => px * 0.5;
   const stew0Z = () => 24 + Math.max(0, t - 1.4) * 20;
+  /* road curve + hills (cosmetic only: collision lanes are unaffected, everything bends relative to the camera) */
+  const XC = z => clamp((z - 120) / 220, 0, 1) * (22 * Math.sin(z / 130 + ph1) + 3 * Math.sin(z / 52 + ph2));
+  let X0 = 0, D0 = 0;
+  const Lof = zr => clamp(XC(pz + zr) - X0 - D0 * zr, -2.6, 2.6);
+  const px3 = (lat, zr, s, cx) => 96 + (lat - cx + Lof(zr)) * RUN_LW * s;
+  function setCam() {
+    const amp = clamp((pz - 60) / 200, 0, 1);
+    rzH = Math.round(RUN_HZ + amp * (10 * Math.sin(pz / 120 + ph3) + 4 * Math.sin(pz / 55 + ph4)));
+    rzK = RUN_YP - rzH; rzC = RUN_CEIL - rzK; X0 = XC(pz); D0 = XC(pz + 0.5) - XC(pz - 0.5);
+  }
 
-  const part = (x, y, vx, vy2, l, c, s, g2) => { if (parts.length < 150) parts.push({ x: x, y: y, vx: vx, vy: vy2, l: l, ml: l, c: c, s: s || 1, g: g2 == null ? 220 : g2 }); };
+  const part = (x, y, vx, vy2, l, c, s, g2) => { if (parts.length < 160) parts.push({ x: x, y: y, vx: vx, vy: vy2, l: l, ml: l, c: c, s: s || 1, g: g2 == null ? 220 : g2 }); };
   const pop = (txt, x, y, c, sc) => pops.push({ t: txt, x: x, y: y, c: c, l: 0, sc: sc || 1 });
+  const runnerX = () => 96 + (px - cam()) * RUN_LW;
   function dustBurst(n) {
-    for (let i = 0; i < n; i++) part(96 + (px - cam()) * RUN_LW + (rnd() - 0.5) * 12, RUN_YP - yj, (rnd() - 0.5) * 50, -rnd() * 30, 0.35, TH.out ? '#c9a68a' : '#cfd6e0', 1, 40);
+    for (let i = 0; i < n; i++) part(runnerX() + (rnd() - 0.5) * 12, RUN_YP - yj, (rnd() - 0.5) * 50, -rnd() * 30, 0.35, ZT(pz).out ? '#c9a68a' : '#cfd6e0', 1, 40);
   }
 
   /* ---- input ---- */
@@ -405,45 +470,69 @@ function makeRunner(seed, skin) {
     slideT = 0.62; slideAge = 0; SFX.swish(); SFX.tone(220, 0.1, 'triangle', 0.05, 110); dustBurst(5); return true;
   }
   function bump(d) { shx = d * -1.5; SFX.tone(150, 0.05, 'square', 0.04); }
+  function startMove(dir) { fromL = tl; tl += dir; mt = 0; lastLaneT = t; lastFrom = fromL; SFX.tone(520, 0.05, 'triangle', 0.06, 760); }
+  function lane(dir) {
+    let lp = tl; for (const q of laneQ) lp += q;
+    if (lp + dir < -1 || lp + dir > 1) { bump(dir); return; }
+    if (mt < 1) { if (laneQ.length < 2) laneQ.push(dir); } else startMove(dir);
+    if (dir < 0) acts.left++; else acts.right++;
+  }
   me.act = a => {
     if (me.over) return;
-    if (a === 'left') { if (tl > -1) { tl--; SFX.tone(520, 0.05, 'triangle', 0.06, 700); acts.left++; } else bump(-1); }
-    else if (a === 'right') { if (tl < 1) { tl++; SFX.tone(520, 0.05, 'triangle', 0.06, 700); acts.right++; } else bump(1); }
+    if (a === 'left') lane(-1); else if (a === 'right') lane(1);
     else if (a === 'jump') { acts.jump++; if (!doJump()) bufJ = 0.2; }
     else if (a === 'slide') { acts.slide++; if (!doSlide()) bufS = 0.2; }
   };
   me.press = id => { if (KMAP[id]) me.act(KMAP[id]); };
   me.release = () => {};
-  let drag = null; const THR = 9;
-  me.onDown = (id, x, y) => { if (!drag) drag = { id: id, x: x, y: y }; };
+  let drag = null; const THR = 8;
+  me.onDown = (id, x, y) => { if (!drag) drag = { id: id, x: x, y: y, x0: x, y0: y, t0: performance.now(), fired: false }; };
   me.onMove = (id, x, y) => {
     if (!drag || drag.id !== id) return;
     const dx = x - drag.x, dy = y - drag.y;
     if (Math.abs(dx) < THR && Math.abs(dy) < THR) return;
     if (Math.abs(dx) > Math.abs(dy)) me.act(dx < 0 ? 'left' : 'right'); else me.act(dy < 0 ? 'jump' : 'slide');
-    drag.x = x; drag.y = y;
+    drag.x = x; drag.y = y; drag.fired = true;
   };
-  me.onUp = id => { if (drag && drag.id === id) drag = null; };
+  me.onUp = (id, x, y) => {
+    if (drag && drag.id === id) {
+      if (!drag.fired && Math.hypot(x - drag.x0, y - drag.y0) < THR && performance.now() - drag.t0 < 400) { acts.tap++; me.act(x < 96 ? 'left' : 'right'); }
+      drag = null;
+    }
+  };
 
-  /* ---- stumble ---- */
+  /* ---- stumble / chase ---- */
   function stumble(why, k) {
     if (inv > 0 || me.over) return;
-    hitLog.push(k + '@' + t.toFixed(0));
-    lives--; hits++; inv = 1.8; stumbleT = 0.6; shake = 0.55; pen = Math.max(pen, 0.4); chain = 0; chainT = 0; flash = 0.18; flashC = '#ff004d';
+    if (shield) {
+      shield = false; inv = 1.0; flash = 0.12; flashC = '#29adff'; SFX.ding(); SFX.thud(); pop('HARD HAT!', 96, 150, SKY, 2);
+      for (let i = 0; i < 18; i++) part(runnerX(), RUN_YP - 22 - yj, (rnd() - 0.5) * 200, -rnd() * 140, 0.5, [SKY, WHT, YEL][i % 3], 2, 300);
+      return;
+    }
+    hitLog.push(k + '@' + t.toFixed(0)); hits++;
+    shake = 0.55; flash = 0.18; flashC = '#ff004d'; chain = 0; chainT = 0;
     SFX.thud(); SFX.bad(); SFX.noise(0.3, 0.2, 2200, 200);
-    for (let i = 0; i < 22; i++) part(96 + (px - cam()) * RUN_LW, RUN_YP - 20 - yj, (rnd() - 0.5) * 220, -rnd() * 150, 0.5 + rnd() * 0.3, [YEL, ORG, WHT, RED][i & 3], 2, 380);
+    for (let i = 0; i < 22; i++) part(runnerX(), RUN_YP - 20 - yj, (rnd() - 0.5) * 220, -rnd() * 150, 0.5 + rnd() * 0.3, [YEL, ORG, WHT, RED][i & 3], 2, 380);
+    if (near > 0.1) { me.over = true; caught = true; overT = 0; endMsg = RUN_TEXT.lose; won = false; near = 1; pop('GOTCHA!', 96, 150, RED, 2); return; }
+    inv = 1.4; stumbleT = 0.6; pen = Math.max(pen, 0.36); near = 1; bossT = 0;
     pop(why === 'pit' ? 'WHOA!' : 'OUCH!', 96, 150, RED, 2);
-    if (lives <= 0) { me.over = true; overT = 0; endMsg = RUN_TEXT.lose; won = false; }
   }
 
   /* ---- update ---- */
   function step(dt) {
     t += dt;
     pen = Math.max(0, pen - dt * 0.2);
-    v = runVt(t) * (1 - pen);
+    near = Math.max(0, near - dt / 9.5);
+    magnetT = Math.max(0, magnetT - dt); x2T = Math.max(0, x2T - dt); boostGrace = Math.max(0, boostGrace - dt);
+    if (boostT > 0) { boostT -= dt; inv = Math.max(inv, 0.15); near = Math.max(0, near - dt * 0.4); if (boostT <= 0) { boostGrace = 0.6; inv = Math.max(inv, 0.7); } }
+    v = runVt(t) * (1 - pen) * (boostT > 0 ? 1.4 : 1);
     pz += v * dt;
-    /* lateral */
-    const dxl = tl - px, sp = 7.5 * dt; px = Math.abs(dxl) <= sp ? tl : px + Math.sign(dxl) * sp;
+    /* lateral: crisp one-lane snap, ~0.09s, buffered */
+    if (mt < 1) {
+      mt = Math.min(1, mt + dt / 0.09); const e = mt * mt * (3 - 2 * mt); px = fromL + (tl - fromL) * e;
+      if (mt >= 1) { px = tl; if (laneQ.length) startMove(laneQ.shift()); }
+    } else px = tl;
+    cl = mt >= 0.5 ? tl : fromL;
     /* vertical */
     if (yj > 0 || vy > 0) {
       vy -= (8 * RUN_JH / (RUN_JT * RUN_JT)) * dt * (qSlide ? 1.6 : 1); yj += vy * dt;
@@ -453,78 +542,104 @@ function makeRunner(seed, skin) {
     if (slideT > 0) { slideT -= dt; slideAge += dt; if (yj > 0) slideT = 0; } else slideAge += dt;
     if (bufJ > 0) { bufJ -= dt; if (yj <= 0 && doJump()) bufJ = 0; }
     if (bufS > 0) { bufS -= dt; if (doSlide()) bufS = 0; }
-    inv = Math.max(0, inv - dt); stumbleT = Math.max(0, stumbleT - dt); hintT += dt;
+    inv = Math.max(0, inv - dt); stumbleT = Math.max(0, stumbleT - dt); hintT += dt; bossT += dt;
     shake = Math.max(0, shake - dt * 1.2);
     shx = shake > 0 ? (rnd() - 0.5) * 9 * shake : shx * 0.7; shy = shake > 0 ? (rnd() - 0.5) * 7 * shake : 0;
-    /* footsteps */
+    /* footsteps (+ the foreman's heavy thumps when he is close) */
     stepPh += dt * (2.4 + v * 0.17);
     const sn = Math.floor(stepPh * 2);
     if (sn !== lastStep) { lastStep = sn; if (yj <= 0 && slideT <= 0 && t - lastStepT > 0.11) { lastStepT = t; SFX.noise(0.03, 0.045, 1100, 300); if (v > 14 && (sn & 1)) dustBurst(1); } }
-    /* hit tests */
+    if (near > 0.2) { bossStep += dt * (3.2 + near * 1.5); if (bossStep >= 1) { bossStep = 0; SFX.tone(70 + near * 40, 0.1, 'triangle', 0.09 * near, 40); } }
+    /* hit tests: logical lane (target once the snap passes 50%) */
     const hgt = slideT > 0 ? 18 : 40;
     while (oi < objs.length && objs[oi].z + objs[oi].len < pz - 3) oi++;
     for (let i = oi; i < objs.length; i++) {
       const o = objs[i]; if (o.z > pz + 8) break;
-      const inz = o.z <= pz + 0.2 && o.z + o.len >= pz - 0.4, dl = Math.abs(px - o.lane);
+      const inz = o.z <= pz + 0.2 && o.z + o.len >= pz - 0.4, same = cl === o.lane;
       if (o.k === 'U') {
-        if (inz && !o.hit && dl < 0.75 && yj < 4) { o.hit = true; pen = Math.max(pen, 0.22); SFX.splash(); for (let q = 0; q < 10; q++) part(96 + (px - cam()) * RUN_LW + (rnd() - 0.5) * 20, RUN_YP - 2, (rnd() - 0.5) * 120, -rnd() * 90, 0.5, '#6fc0ff', 1, 300); pop('SLIP', 96, 160, SKY, 1); }
+        if (inz && !o.hit && same && yj < 4) { o.hit = true; pen = Math.max(pen, 0.2); SFX.splash(); for (let q = 0; q < 10; q++) part(runnerX() + (rnd() - 0.5) * 20, RUN_YP - 2, (rnd() - 0.5) * 120, -rnd() * 90, 0.5, '#6fc0ff', 1, 300); pop('SLIP', 96, 160, SKY, 1); }
         continue;
       }
-      if (inz && !o.hit && dl < 0.56) {
+      if (inz && !o.hit && same) {
         const K = RUN_KT[o.k]; let bad;
         if (o.k === 'H' || o.k === 'W') bad = yj + hgt > 30;
         else if (o.k === 'F') bad = yj < 60;
         else if (o.k === 'P') bad = yj < 4;
         else bad = yj < K.clr;
-        if (bad) { o.hit = true; if (inv <= 0) stumble(o.k === 'P' ? 'pit' : 'hit', o.k); }
+        if (bad) {
+          o.hit = true;
+          if (boostT > 0) { bonusPts += 30; pop('SMASH +30', 96, 170, ORG, 1); SFX.boom(); shake = Math.max(shake, 0.25); for (let q = 0; q < 14; q++) part(runnerX(), RUN_YP - 20, (rnd() - 0.5) * 260, -rnd() * 160, 0.5, [YEL, ORG, WHT][q % 3], 2, 400); }
+          else if (inv <= 0) stumble(o.k === 'P' ? 'pit' : 'hit', o.k);
+        }
       }
-      /* pass-by + near miss bookkeeping at the moment the front face crosses the runner */
       if (!o.passed && o.z <= pz) {
         o.passed = true;
         if (!o.hit && inv <= 0.01 && !me.over) {
           let nm = false;
-          if (dl >= 0.56 && dl < 0.88 && o.k !== 'P') nm = true;
-          else if (dl < 0.56 && (o.k === 'C' || o.k === 'B' || o.k === 'R') && yj - RUN_KT[o.k].clr < 7) nm = true;
-          else if (dl < 0.56 && (o.k === 'H' || o.k === 'W') && slideAge < 0.2) nm = true;
+          if (!same && o.k !== 'P' && t - lastLaneT < 0.3 && Math.abs(o.lane - lastFrom) < 0.5) nm = true;
+          else if (same && (o.k === 'C' || o.k === 'B' || o.k === 'R') && yj - RUN_KT[o.k].clr < 7) nm = true;
+          else if (same && (o.k === 'H' || o.k === 'W') && slideAge < 0.2) nm = true;
           if (nm) { nearMiss++; bonusPts += 25; pop('CLOSE +25', 96, 168, YEL, 1); SFX.tone(1320, 0.08, 'triangle', 0.08); SFX.tone(1760, 0.1, 'triangle', 0.06, 0, 0.05); }
         }
       }
     }
-    /* coins */
+    /* coins (magnet pulls everything in range) */
     while (ci < coins.length && coins[ci].z < pz - 2) ci++;
     chainT = Math.max(0, chainT - dt);
     if (chain && chainT <= 0) { if (chain >= 6) { const b = chain * 5; bonusPts += b; pop('CHAIN +' + b, 96, 140, LIME, 1); } chain = 0; }
+    const lim = magnetT > 0 ? pz + 20 : pz + 2;
     for (let i = ci; i < coins.length; i++) {
-      const c = coins[i]; if (c.z > pz + 2) break; if (c.got) continue;
+      const c = coins[i]; if (c.z > lim) break; if (c.got) continue;
       if (c.gate >= 0 && stew0Z() < c.z) continue;
+      if (magnetT > 0 && c.z > pz - 1 && Math.abs(c.lane - px) < 2.3) {
+        c.z += (pz + 0.2 - c.z) * Math.min(1, dt * 5); c.lane += (px - c.lane) * Math.min(1, dt * 9); c.h += ((yj + 12) - c.h) * Math.min(1, dt * 9);
+      }
       if (Math.abs(c.z - pz) < 1.3 && Math.abs(px - c.lane) < 0.55 && c.h >= yj - 6 && c.h <= yj + hgt + 6) {
-        c.got = true; quarters++; chain = chainT > 0 ? chain + 1 : 1; chainT = 0.95; bestChain = Math.max(bestChain, chain);
+        c.got = true; quarters++; if (x2T > 0) bonusPts += 10; chain = chainT > 0 ? chain + 1 : 1; chainT = 0.95; bestChain = Math.max(bestChain, chain);
         const f = 1000 + Math.min(chain, 14) * 85; SFX.tone(f, 0.07, 'square', 0.06); SFX.tone(f * 1.5, 0.12, 'triangle', 0.05, 0, 0.03);
         const sx = 96 + (c.lane - cam()) * RUN_LW, sy = RUN_YP - c.h - 6;
         for (let q = 0; q < 5; q++) part(sx, sy, (rnd() - 0.5) * 120, -rnd() * 90 - 20, 0.4, [YEL, WHT, ORG][q % 3], 1, 260);
         if (chain === 5 || chain === 10 || chain === 15 || chain === 20) pop('CHAIN x' + chain, 96, 140, LIME, 1);
       }
     }
-    /* milestones */
+    /* power-ups */
+    while (pi < pups.length && pups[pi].z < pz - 2) pi++;
+    for (let i = pi; i < pups.length; i++) {
+      const u = pups[i]; if (u.z > pz + 2) break; if (u.got) continue;
+      if (Math.abs(u.z - pz) < 1.6 && cl === u.lane) {
+        u.got = true; SFX.win(); flash = 0.1; flashC = '#ffffff';
+        if (u.kind === 'M') { magnetT = 8; pop('MAGNET!', 96, 140, '#ff4d6d', 2); }
+        else if (u.kind === 'S') { shield = true; pop('HARD HAT SHIELD', 96, 140, SKY, 1); }
+        else if (u.kind === 'X') { x2T = 10; pop('COFFEE x2 QUARTERS', 96, 140, ORG, 1); }
+        else { boostT = 3.2; pop('RUSH BOOST!', 96, 140, YEL, 2); }
+        for (let q = 0; q < 16; q++) part(runnerX(), RUN_YP - 24, (rnd() - 0.5) * 200, -rnd() * 160, 0.6, [YEL, WHT, LIME, SKY][q & 3], 2, 260);
+      }
+    }
+    /* zones, milestones, best distance */
+    const z0 = zi(pz); if (z0 !== zoneNow) { zoneNow = z0; flash = 0.25; flashC = '#ffffff'; mTxt = 1.8; mm = -1; SFX.win(); }
     const mi = Math.floor(pz / 500); if (mi > milestone) { milestone = mi; mm = mi * 500; mTxt = 1.6; flash = 0.22; flashC = '#ffffff'; SFX.win(); }
-    /* finish gate */
+    if (!bestFlag && RUN_BESTD > 300 && pz > RUN_BESTD) { bestFlag = true; pop('NEW BEST DISTANCE!', 96, 120, LIME, 1); SFX.ding(); }
     if (gateZ < 0 && t > RUN_CAP - 4) gateZ = pz + (RUN_CAP - t) * runVt((t + RUN_CAP) / 2) * (1 - pen * 0.5);
-    /* end of shift */
-    if (t >= RUN_CAP && !me.over) { me.over = true; overT = 0; won = true; endMsg = RUN_TEXT.win; bonusPts += 250 + lives * 100; flash = 0.3; flashC = '#ffffff'; SFX.win(); SFX.ding(); for (let i = 0; i < 40; i++) part(96 + (rnd() - 0.5) * 160, 120 + rnd() * 60, (rnd() - 0.5) * 100, -rnd() * 160, 1.1, [YEL, LIME, WHT, SKY, PINK][i % 5], 2, 260); }
+    if (t >= RUN_CAP && !me.over) { me.over = true; overT = 0; won = true; endMsg = RUN_TEXT.win; bonusPts += 250 + (near < 0.1 ? 150 : 0); flash = 0.3; flashC = '#ffffff'; SFX.win(); SFX.ding(); for (let i = 0; i < 40; i++) part(96 + (rnd() - 0.5) * 160, 120 + rnd() * 60, (rnd() - 0.5) * 100, -rnd() * 160, 1.1, [YEL, LIME, WHT, SKY, PINK][i % 5], 2, 260); }
+  }
+  function finish() {
+    if (me.__fin) return; me.__fin = true;
+    const sc = scoreNow(); newBest = sc > RUN_BEST; RUN_BEST = Math.max(RUN_BEST, sc); RUN_BESTD = Math.max(RUN_BESTD, Math.floor(pz));
   }
   me.update = dt => {
     if (me.ended) return;
     dt = Math.min(dt, 1 / 20);
     if (me.over) {
+      if (overT === 0) finish();
       overT += dt;
       if (won) { pz += runVt(RUN_CAP) * dt * Math.max(0, 1 - overT * 0.6); if (overT < 0.4 || (overT > 1.0 && overT < 1.1)) { for (let i = 0; i < 3; i++) part(96 + (rnd() - 0.5) * 140, 100 + rnd() * 50, (rnd() - 0.5) * 80, -rnd() * 120, 0.9, [YEL, LIME, WHT, SKY, PINK][i % 5], 2, 240); } }
       else { shake = Math.max(0, shake - dt); shx *= 0.8; shy = 0; }
       yj = Math.max(0, yj + vy * dt); if (yj <= 0) { yj = 0; vy = 0; }
-      if (overT > (won ? 2.1 : 1.8)) me.ended = true;
+      if (overT > (won ? 2.1 : 1.9)) me.ended = true;
       tickFx(dt); me.score = scoreNow(); return;
     }
     const n = Math.ceil(dt / (1 / 90));
-    for (let i = 0; i < n; i++) step(dt / n);
+    for (let i = 0; i < n; i++) { step(dt / n); if (me.over) break; }
     tickFx(dt);
     me.score = scoreNow();
   };
@@ -533,84 +648,91 @@ function makeRunner(seed, skin) {
     for (let i = parts.length - 1; i >= 0; i--) { const p = parts[i]; p.l -= dt; if (p.l <= 0) { parts.splice(i, 1); continue; } p.vy += p.g * dt; p.x += p.vx * dt; p.y += p.vy * dt; }
     for (let i = pops.length - 1; i >= 0; i--) { pops[i].l += dt; if (pops[i].l > 0.9) pops.splice(i, 1); }
     flash = Math.max(0, flash - dt); mTxt = Math.max(0, mTxt - dt);
-    sf = clamp((v - 14) / 13, 0, 1);
+    sf = clamp((v - 14) / 13, 0, 1) + (boostT > 0 ? 0.6 : 0);
+    lagX += (px - lagX) * Math.min(1, dt * 3); bossPh += dt * (6 + v * 0.1);
+    if (boostT > 0 && !me.over) for (let i = 0; i < 2; i++) part(runnerX() + (rnd() - 0.5) * 10, RUN_YP - 6 - yj, (rnd() - 0.5) * 30, 40 + rnd() * 60, 0.3, [YEL, ORG, WHT][i % 3], 2, 0);
     for (const L2 of lines) { L2.r += (60 + v * 9) * dt; if (L2.r > 190) { L2.r = 24 + rnd() * 20; L2.a = rnd() * 6.283; } }
   }
 
   /* ---------- rendering ---------- */
   function drawCeil(g, cx) {
-    if (TH.out) return;
-    for (let y = -6; y < RUN_HZ; y++) {
-      const s = (RUN_HZ - y - 0.5) / RUN_CH; if (s < RUN_SMIN) continue;
-      const zr = RUN_DC / s - RUN_DC, wz = pz + zr, dz = RUN_DC / (RUN_CH * s * s), u = ((wz % 9) + 9) % 9;
-      if (u < Math.max(0.8, dz * 1.1)) { R(g, -8, y, VW + 16, 1, runFc(TH.ceilD, s)); continue; }
-      R(g, -8, y, VW + 16, 1, runFc(TH.ceil, s));
+    for (let y = -6; y < rzH; y++) {
+      const s = (rzH - y - 0.5) / rzC; if (s < RUN_SMIN) continue;
+      const zr = RUN_DC / s - RUN_DC, wz = pz + zr, TZ = ZT(wz); if (TZ.out) continue;
+      const dz = RUN_DC / (rzC * s * s), u = ((wz % 9) + 9) % 9;
+      if (u < Math.max(0.8, dz * 1.1)) { R(g, -8, y, VW + 16, 1, runFc(TZ.ceilD, s, 1, TZ)); continue; }
+      R(g, -8, y, VW + 16, 1, runFc(TZ.ceil, s, 1, TZ));
       if (u > 3.4 && u < 7 && s > 0.1) {
-        const a = RUN_LW * s;
-        for (const lx of [-1.2, 0, 1.2]) R(g, 96 + (lx - cx) * a - 0.22 * a, y, 0.44 * a, 1, runFc(TH.lamp, s));
+        const a = RUN_LW * s, L = Lof(zr);
+        for (const lx of [-1.2, 0, 1.2]) R(g, 96 + (lx - cx + L) * a - 0.22 * a, y, 0.44 * a, 1, runFc(TZ.lamp, s, 1, TZ));
       }
     }
   }
   function drawFloor(g, cx) {
-    for (let y = RUN_HZ + 1; y < VH + 8; y++) {
-      const s = (y + 0.5 - RUN_HZ) / RUN_K; if (s < RUN_SMIN) continue;
-      const zr = RUN_DC / s - RUN_DC, wz = pz + zr, dz = RUN_DC / (RUN_K * s * s), a = RUN_LW * s, c0 = 96 - cx * a;
-      const tile = Math.floor(wz / 3), seam = (((wz % 3) + 3) % 3) < Math.max(0.12, dz * 0.9);
-      const far = s < 0.17;
-      const fcol = far ? runMix(TH.fA, TH.fB, 0.5) : ((tile & 1) ? TH.fA : TH.fB);
-      R(g, -8, y, VW + 16, 1, runFc(seam ? TH.seam : TH.fo, s));
+    for (let y = rzH + 1; y < VH + 8; y++) {
+      const s = (y + 0.5 - rzH) / rzK; if (s < RUN_SMIN) continue;
+      const zr = RUN_DC / s - RUN_DC, wz = pz + zr, TZ = ZT(wz), dz = RUN_DC / (rzK * s * s), a = RUN_LW * s, c0 = 96 + (Lof(zr) - cx) * a;
+      const tile = Math.floor(wz / 3), seam = (((wz % 3) + 3) % 3) < Math.max(0.12, dz * 0.9), far = s < 0.17;
+      let fcol = far ? runMix(TZ.fA, TZ.fB, 0.5) : ((tile & 1) ? TZ.fA : TZ.fB);
+      if (!TZ.out) { const u9 = ((wz % 9) + 9) % 9; if (u9 > 3.2 && u9 < 7.2) fcol = runMix(fcol, TZ.lamp, TZ.ceil === '#161a33' ? 0.1 : 0.07); }
+      R(g, -8, y, VW + 16, 1, runFc(seam ? TZ.seam : TZ.fo, s, 1, TZ));
       const l1 = c0 - 1.62 * a, r1 = c0 + 1.62 * a;
-      R(g, l1, y, r1 - l1, 1, runFc(TH.saf, s));
+      R(g, l1, y, r1 - l1, 1, runFc(TZ.saf, s, 1, TZ));
       const l2 = c0 - 1.54 * a, r2 = c0 + 1.54 * a;
-      R(g, l2, y, r2 - l2, 1, runFc(seam ? TH.seam : fcol, s));
+      R(g, l2, y, r2 - l2, 1, runFc(seam ? TZ.seam : fcol, s, 1, TZ));
       if (((wz % 4) + 4) % 4 < 2.2 || far) {
         const w = Math.max(1, 0.05 * a);
-        R(g, c0 - 0.5 * a - w / 2, y, w, 1, runFc(TH.line, s)); R(g, c0 + 0.5 * a - w / 2, y, w, 1, runFc(TH.line, s));
+        R(g, c0 - 0.5 * a - w / 2, y, w, 1, runFc(TZ.line, s, 1, TZ)); R(g, c0 + 0.5 * a - w / 2, y, w, 1, runFc(TZ.line, s, 1, TZ));
       }
     }
   }
   function drawWalls(g, cx) {
     for (let side = 0; side < 2; side++) {
-      const D2 = (RUN_WB + (side ? -cx : cx)) * RUN_LW;
       for (let x = -6; x < VW + 6; x++) {
         if ((side === 0) !== (x < 96)) continue;
-        const s = Math.abs(x + 0.5 - 96) / D2; if (s < RUN_SMIN || s > 1.6) continue;
-        const wz = pz + RUN_DC / s - RUN_DC, fy = runFy(s);
-        const u = ((wz % 8) + 8) % 8, pi = Math.floor(wz / 8);
-        const seg = (b, tp, c) => { const y1 = fy - tp * s, y2 = fy - b * s; R(g, x, y1, 1, Math.max(1, y2 - y1), runFc(c, s)); };
-        if (TH.out) {
-          seg(0, 14, TH.wL); seg(14, 46, TH.wB);
-          if (u < 0.5) seg(0, 52, TH.pil);
-          else { const yy1 = Math.round(fy - 46 * s), yy2 = Math.round(fy - 14 * s); fc(g, runFc(TH.win, s)); for (let y = yy1; y < yy2; y++) if (((x + y) & 3) === 0 || ((x - y) & 3) === 0) g.fillRect(x, y, 1, 1); }
-          seg(46, 49, TH.pil);
-          if (u > 1 && u < 2) seg(14, 18, ((Math.floor(wz * 2)) & 1) ? TH.kA : TH.kB);
+        const dxs = Math.abs(x + 0.5 - 96);
+        let s = dxs / ((RUN_WB + (side ? -cx : cx)) * RUN_LW);
+        for (let it = 0; it < 2; it++) { if (s < RUN_SMIN * 0.8) break; const L = Lof(RUN_DC / s - RUN_DC); const dd = (RUN_WB + (side ? -cx + L : cx - L)) * RUN_LW; s = dxs / Math.max(30, dd); }
+        if (s < RUN_SMIN || s > 1.6) continue;
+        const wz = pz + RUN_DC / s - RUN_DC, fy = runFy(s), TZ = ZT(wz), thz = zth(wz);
+        const u = ((wz % 8) + 8) % 8, pi2 = Math.floor(wz / 8);
+        const seg = (b, tp, c) => { const y1 = fy - tp * s, y2 = fy - b * s; R(g, x, y1, 1, Math.max(1, y2 - y1), runFc(c, s, 1, TZ)); };
+        if (TZ.out) {
+          seg(0, 14, TZ.wL); seg(14, 46, TZ.wB);
+          if (u < 0.5) seg(0, 52, TZ.pil);
+          else { const yy1 = Math.round(fy - 46 * s), yy2 = Math.round(fy - 14 * s); fc(g, runFc(TZ.win, s, 1, TZ)); for (let y = yy1; y < yy2; y++) if (((x + y) & 3) === 0 || ((x - y) & 3) === 0) g.fillRect(x, y, 1, 1); }
+          seg(46, 49, TZ.pil);
+          if (u > 1 && u < 2) seg(14, 18, ((Math.floor(wz * 2)) & 1) ? TZ.kA : TZ.kB);
           continue;
         }
-        if (u < 0.9) { seg(0, RUN_CEIL, TH.pil); if (u < 0.2 || u > 0.7) seg(0, RUN_CEIL, runMix(TH.pil, '#ffffff', 0.12)); continue; }
-        seg(0, 11, (Math.floor(wz * 1.4) & 1) ? TH.kA : TH.kB);
-        const pc = TH.pan ? TH.pan[((pi % 4) + 4) % 4] : null;
-        seg(11, 72, pc || ((pi & 1) ? TH.wA : TH.wB));
-        seg(72, 80, TH.wL);
-        seg(80, 150, (u > 1.6 && u < 6.4 && Math.abs(u - 4) > 0.25) ? TH.win : (pc || TH.wA));
-        seg(150, RUN_CEIL - 6, pc ? runMix(pc, '#ffffff', 0.25) : ((pi & 1) ? TH.wB : TH.wA));
-        if (((Math.floor(wz * 3) % 5) === 0)) seg(150, RUN_CEIL - 6, TH.wL);
-        seg(RUN_CEIL - 6, RUN_CEIL, TH.pil);
-        if (u > 1 && u < 2 && thi !== 2) seg(100, 104, TH.kA);
-        if (thi === 1 && u > 3.6 && u < 4.4) seg(124, 132, '#ffd27a');
+        if (u < 0.9) { seg(0, rzK < 0 ? 0 : RUN_CEIL, TZ.pil); if (u < 0.2 || u > 0.7) seg(0, RUN_CEIL, runMix(TZ.pil, '#ffffff', 0.12)); continue; }
+        seg(0, 11, (Math.floor(wz * 1.4) & 1) ? TZ.kA : TZ.kB);
+        const pc = TZ.pan ? TZ.pan[((pi2 % 4) + 4) % 4] : null;
+        seg(11, 72, pc || ((pi2 & 1) ? TZ.wA : TZ.wB));
+        seg(72, 80, TZ.wL);
+        seg(80, 150, (u > 1.6 && u < 6.4 && Math.abs(u - 4) > 0.25) ? TZ.win : (pc || TZ.wA));
+        seg(150, RUN_CEIL - 6, pc ? runMix(pc, '#ffffff', 0.25) : ((pi2 & 1) ? TZ.wB : TZ.wA));
+        if (((Math.floor(wz * 3) % 5) === 0)) seg(150, RUN_CEIL - 6, TZ.wL);
+        seg(RUN_CEIL - 6, RUN_CEIL, TZ.pil);
+        if (u > 1 && u < 2 && thz !== 2) seg(100, 104, TZ.kA);
+        if (thz === 1 && u > 3.6 && u < 4.4) seg(124, 132, '#ffd27a');
       }
     }
   }
-  function bandRows(g, z0, z1, lat0, lat1, colFn, cx) {
+  /* floor decal rows between world z0..z1; colFn(wz, u, row) may return a colour or an array of [lat0,lat1,colour] strips */
+  function bandRows(g, z0, z1, lat0, lat1, colFn, cx, k) {
     const zr0 = Math.max(z0 - pz, -1.2), zr1 = Math.min(z1 - pz, RUN_ZV); if (zr1 <= zr0) return;
     const ya = Math.ceil(runFy(runS(zr1))), yb = Math.floor(runFy(runS(zr0)));
     for (let y = ya; y <= yb && y < VH + 8; y++) {
-      const s = (y + 0.5 - RUN_HZ) / RUN_K; if (s < RUN_SMIN) continue;
-      const wz = pz + RUN_DC / s - RUN_DC; if (wz < z0 || wz > z1) continue;
+      const s = (y + 0.5 - rzH) / rzK; if (s < RUN_SMIN) continue;
+      const zr = RUN_DC / s - RUN_DC, wz = pz + zr; if (wz < z0 || wz > z1) continue;
       const a = RUN_LW * s, c = colFn(wz, s); if (!c) continue;
-      const x0 = 96 + (lat0 - cx) * a, x1 = 96 + (lat1 - cx) * a;
-      R(g, x0, y, x1 - x0, 1, runFc(c, s, 0.5));
+      const base = 96 + (Lof(zr) - cx) * a, th = ZT(wz);
+      if (typeof c === 'string') { const x0 = base + lat0 * a, x1 = base + lat1 * a; R(g, x0, y, x1 - x0, 1, runFc(c, s, k == null ? 0.5 : k, th)); }
+      else for (const st of c) R(g, base + st[0] * a, y, (st[1] - st[0]) * a, 1, runFc(st[2], s, k == null ? 0.5 : k, th));
     }
   }
+  function strips(l0, l1, n, ca, cb, ph) { const o = [], w = (l1 - l0) / n; for (let i = 0; i < n; i++) o.push([l0 + i * w, l0 + (i + 1) * w + 0.01, ((i + ph) & 1) ? ca : cb]); return o; }
   function drawDecals(g, cx) {
     for (let i = oi; i < objs.length; i++) {
       const o = objs[i]; if (o.z > pz + RUN_ZV) break;
@@ -619,11 +741,27 @@ function makeRunner(seed, skin) {
         continue;
       }
       const a = RUN_KT[o.k].act, v0 = o.v || 12, bz = o.z - 0.4 * v0 - 2.6;
-      if (o.k === 'P') bandRows(g, o.z, o.z + o.len, o.lane - 0.5, o.lane + 0.5, (wz) => (wz - o.z < 0.35 || o.z + o.len - wz < 0.35) ? '#ffcc00' : '#050509', cx);
+      if (o.k === 'P') {
+        const l0 = o.lane - 0.5, l1 = o.lane + 0.5, L = o.len;
+        /* hazard-striped lips, dark depth gradient, orange glow on the far wall, plus a wide warning apron */
+        bandRows(g, o.z - 0.9, o.z, l0 - 0.04, l1 + 0.04, (wz) => strips(l0 - 0.04, l1 + 0.04, 8, '#ffd21a', '#14141c', Math.floor(wz * 2.5)), cx, 0.25);
+        bandRows(g, o.z, o.z + L, l0, l1, (wz) => {
+          const u = (wz - o.z) / L;
+          if (u > 0.82) return runMix('#0a0508', '#ff7a1a', (u - 0.82) / 0.18 * 0.9);
+          return runMix('#2a1018', '#000000', Math.min(1, u * 1.4));
+        }, cx, 0.2);
+        bandRows(g, o.z + L, o.z + L + 0.5, l0 - 0.04, l1 + 0.04, () => strips(l0 - 0.04, l1 + 0.04, 8, '#ffd21a', '#14141c', 1), cx, 0.25);
+        bandRows(g, o.z + 0.3, o.z + L - 0.2, l0 - 0.06, l0, () => '#ffd21a', cx, 0.25); bandRows(g, o.z + 0.3, o.z + L - 0.2, l1, l1 + 0.06, () => '#ffd21a', cx, 0.25);
+      }
       if (o.nd) continue;
+      const wide = o.k === 'W', lo = wide ? -1.5 : o.lane - 0.5, hi = wide ? 1.5 : o.pair ? o.lane + 1.5 : o.lane + 0.5;
+      if (o.k === 'P') {   /* orange/black chevron approach apron + second warning strip */
+        const d0 = o.z - 0.45 * v0 - 3.2;
+        bandRows(g, d0, d0 + 3.0, lo + 0.04, hi - 0.04, (wz) => { const q = (wz - d0) / 0.5, ph = Math.floor(q); return strips(lo + 0.04, hi - 0.04, 6, '#ff8a1a', '#14141c', ph); }, cx, 0.35);
+        continue;
+      }
       const c1 = a === 'J' ? '#ffd21a' : a === 'S' ? '#ff2a40' : '#39a0ff', c2 = a === 'J' ? '#14141c' : a === 'S' ? '#ffffff' : '#10285a';
-      const l0 = o.k === 'W' ? -1.5 : o.lane - 0.5, l1 = o.k === 'W' ? 1.5 : o.pair ? o.lane + 1.5 : o.lane + 0.5;
-      bandRows(g, bz, bz + 2.4, l0 + 0.04, l1 - 0.04, (wz) => (Math.floor((wz - bz) / 0.6) & 1) ? c1 : c2, cx);
+      bandRows(g, bz, bz + 2.4, lo + 0.04, hi - 0.04, (wz) => (Math.floor((wz - bz) / 0.6) & 1) ? c1 : c2, cx);
     }
   }
   /* ---------- sprite blit: img bottom-centre at (x, fy), scaled ---------- */
@@ -641,6 +779,16 @@ function makeRunner(seed, skin) {
     const add = (z, fn) => it.push({ z: z, fn: fn });
     for (let i = oi; i < objs.length; i++) {
       const o = objs[i]; if (o.z > pz + RUN_ZV) break;
+      if (o.k === 'P') {
+        if (o.z > pz - 1) {   /* warning sign a few metres before the pit, steam above it */
+          const sz = o.z - 0.45 * (o.v || 12) - 3.5, side = o.lane < 0 ? -1 : o.lane > 0 ? 1 : -1;
+          if (sz > pz - 1) add(sz, g => { const zr = sz - pz, s = runS(zr), fy = runFy(s); blit(g, sprAt(sz).sign, px3(side * 1.78, zr, s, cx), fy, s, fadeA(s)); });
+          add(o.z + 1.6, g => { const zr = o.z + 1.6 - pz, s = runS(Math.max(zr, -0.9)), fy = runFy(s), x = px3(o.lane, Math.max(zr, -0.9), s, cx), fa = fadeA(s);
+            for (let q = 0; q < 3; q++) { const ph = (t * 0.9 + q / 3) % 1; g.globalAlpha = 0.4 * (1 - ph) * fa; D(g, x + Math.sin(ph * 6 + q * 2) * 6 * s, fy - (8 + ph * 34) * s, Math.max(1, Math.round((3 + ph * 4) * s)), '#ffd9b0'); }
+            g.globalAlpha = 1; });
+        }
+        continue;
+      }
       if (o.z < pz - 1.0 || o.nd || o.k === 'U') continue;
       add(o.z, g => drawObs(g, o, cx));
     }
@@ -649,53 +797,66 @@ function makeRunner(seed, skin) {
       if (c.gate >= 0 && stew0Z() < c.z) continue;
       add(c.z, g => drawCoin(g, c, i, cx));
     }
+    for (let i = pi; i < pups.length; i++) {
+      const u = pups[i]; if (u.z > pz + RUN_ZV) break; if (u.got || u.z < pz - 1.0) continue;
+      add(u.z, g => { const zr = u.z - pz, s = runS(zr), fy = runFy(s), x = px3(u.lane, zr, s, cx), fa = fadeA(s), bob = Math.sin(t * 5 + u.z) * 3;
+        shadow(g, x, fy, 9, s, 0.3 * fa); g.globalAlpha = (0.25 + 0.15 * Math.sin(t * 8)) * fa; D(g, x, fy - 20 * s, Math.max(2, Math.round(16 * s)), '#ffffff'); g.globalAlpha = 1;
+        blit(g, sprAt(u.z).pup[u.kind], x, fy - (10 + bob) * s, s * 1.25, fa); });
+    }
     const k0 = Math.floor((pz - 2) / RUN_BAY), k1 = Math.floor((pz + RUN_ZV) / RUN_BAY);
     for (let k = k0; k <= k1; k++) for (let sd = 0; sd < 2; sd++) {
       const h = hash2(seed * 7 + sd * 131, k), z = k * RUN_BAY + (h >>> 20) % 4; if (z < pz - 1.0 || z > pz + RUN_ZV) continue;
       add(z, g => drawProp(g, h, sd, z, cx));
     }
-    if (!TH.out) {
-      for (let m = Math.floor((pz - 2) / 38); m <= Math.floor((pz + RUN_ZV) / 38); m++) {
-        const z = m * 38 + 14 + (hash2(seed, m) % 8); if (z < pz - 1.0 || z > pz + RUN_ZV) continue;
-        const h = hash2(seed + 5, m);
-        if (h % 5 === 4) add(z, g => { const s = runS(z - pz), fy = runFy(s); blit(g, SPR.banner[(h >>> 4) & 1], 96 - cx * RUN_LW * s, fy - 188 * s, s, fadeA(s) * 0.95); });
-        else add(z, g => { const s = runS(z - pz), fy = runFy(s), lat = (((h >>> 3) % 3) - 1) * 0.35; blit(g, SPR.hang[(h >>> 6) & 1], 96 + (lat - cx) * RUN_LW * s, fy - 192 * s, s, fadeA(s)); });
-      }
-    } else {
-      add(pz + RUN_ZV - 0.01, g => { const x = ((t * 7 + 40) % 300) - 60, y = 62 + Math.sin(t * 0.7) * 6; blit(g, SPR.hang[0], x, y, 0.36, 0.9); const ph = Math.floor(t * 24) & 1; R(g, x - 24, y - 12 - ph, 48, 1, '#2a2040'); });
+    for (let m = Math.floor((pz - 2) / 38); m <= Math.floor((pz + RUN_ZV) / 38); m++) {
+      const z = m * 38 + 14 + (hash2(seed, m) % 8); if (z < pz - 1.0 || z > pz + RUN_ZV) continue;
+      const TZ = ZT(z), SP = sprAt(z), h = hash2(seed + 5, m);
+      if (TZ.out) { if (h % 3 === 0) add(z, g => { const zr = z - pz, s = runS(zr), fy = runFy(s); blit(g, SP.hang[0], px3(((h >>> 3) % 2 ? 1 : -1) * 2.6, zr, s, cx), fy - 72 * s, s * 0.7, fadeA(s)); }); continue; }
+      if (h % 5 === 4) add(z, g => { const zr = z - pz, s = runS(zr), fy = runFy(s); blit(g, SP.banner[(h >>> 4) & 1], px3(0, zr, s, cx), fy - 188 * s, s, fadeA(s) * 0.95); });
+      else add(z, g => { const zr = z - pz, s = runS(zr), fy = runFy(s), lat = (((h >>> 3) % 3) - 1) * 0.35; blit(g, SP.hang[(h >>> 6) & 1], px3(lat, zr, s, cx), fy - 192 * s, s, fadeA(s)); });
+    }
+    if (ZT(pz + 20).out || ZT(pz + RUN_ZV).out) add(pz + RUN_ZV - 0.01, g => { const x = ((t * 7 + 40) % 300) - 60, y = 62 + Math.sin(t * 0.7) * 6; if (!ZT(pz + RUN_ZV * 0.5).out) return; blit(g, runSprites(3).hang[0], x, y, 0.36, 0.9); const ph = Math.floor(t * 24) & 1; R(g, x - 24, y - 12 - ph, 48, 1, '#2a2040'); });
+    /* zone gates every 450 m */
+    for (let k = Math.max(1, zi(pz - 2)); k <= zi(pz + RUN_ZV); k++) {
+      const z = k * ZLEN; if (z < pz - 1.5 || z > pz + RUN_ZV) continue;
+      add(z, g => { const zr = z - pz, s = runS(Math.max(zr, -1.4)), zz = Math.max(zr, -1.4), fy = runFy(s), hw = 1.75 * RUN_LW * s, xc = px3(0, zz, s, cx), TZ = ZT(z + 1), fa = fadeA(s);
+        g.globalAlpha = fa; const top = fy - 215 * s;
+        R(g, xc - hw - 4 * s, top, 8 * s + 1, fy - top, BLK); R(g, xc + hw - 4 * s, top, 8 * s + 1, fy - top, BLK);
+        R(g, xc - hw - 3 * s, top, Math.max(1, 6 * s), fy - top, TZ.kA); R(g, xc + hw - 3 * s, top, Math.max(1, 6 * s), fy - top, TZ.kA); g.globalAlpha = 1;
+        blit(g, sprAt(z + 1).zone, xc, fy - 185 * s, s, fa); });
     }
     for (const sw of stews) {
       if (sw.z < pz - 1.0 || sw.z > pz + RUN_ZV) continue;
-      add(sw.z, g => { const s = runS(sw.z - pz), fy = runFy(s), near = sw.z - pz < 22, f = near ? (Math.floor(t * 5) & 1) : 0; blit(g, SPR.stewW[f], 96 + (sw.side * 2.05 - cx) * RUN_LW * s, fy, s, fadeA(s)); });
+      add(sw.z, g => { const zr = sw.z - pz, s = runS(zr), fy = runFy(s), near2 = zr < 22, f = near2 ? (Math.floor(t * 5) & 1) : 0; blit(g, sprAt(sw.z).stewW[f], px3(sw.side * 2.05, zr, s, cx), fy, s, fadeA(s)); });
     }
     if (t < 5) {   /* opening cameo: steward waves, then sprints ahead dropping the first coin trail */
       const zr = stew0Z() - pz;
-      if (zr > -0.9 && zr < RUN_ZV) add(pz + zr, g => { const s = runS(zr), fy = runFy(s); blit(g, t > 1.4 ? SPR.stewR[Math.floor(t * 8) & 1] : SPR.stewW[Math.floor(t * 4) & 1], 96 - cx * RUN_LW * s, fy, s, fadeA(s)); });
+      if (zr > -0.9 && zr < RUN_ZV) add(pz + zr, g => { const s = runS(zr), fy = runFy(s), SP = sprAt(pz); blit(g, t > 1.4 ? SP.stewR[Math.floor(t * 8) & 1] : SP.stewW[Math.floor(t * 4) & 1], px3(0, zr, s, cx), fy, s, fadeA(s)); });
     }
     it.sort((a, b) => b.z - a.z);
     return it;
   }
   function shadow(g, x, fy, w, s, a) { g.globalAlpha = a; E(g, x, fy, Math.max(1, w * s), Math.max(1, 3 * s), BLK); g.globalAlpha = 1; }
   function drawObs(g, o, cx) {
-    const zr = o.z - pz, s = runS(zr), fy = runFy(s), x = 96 + (o.lane - cx) * RUN_LW * s, fa = fadeA(s);
-    if (o.k === 'C') { shadow(g, x, fy, 20, s, 0.3 * fa); blit(g, SPR.crate, x, fy, s, fa); }
-    else if (o.k === 'B') { shadow(g, x, fy, 22, s, 0.3 * fa); blit(g, SPR.barrier, x, fy, s, fa); }
-    else if (o.k === 'R') { shadow(g, x, fy, 18, s, 0.3 * fa); blit(g, SPR.reel[Math.floor(t * 8) & 1], x, fy, s, fa); }
+    const zr = o.z - pz, s = runS(zr), fy = runFy(s), x = px3(o.lane, zr, s, cx), fa = fadeA(s), SPR = sprAt(o.z);
+    if (o.k === 'C') { shadow(g, x, fy, 20, s, 0.34 * fa); blit(g, SPR.crate, x, fy, s, fa); }
+    else if (o.k === 'B') { shadow(g, x, fy, 22, s, 0.34 * fa); blit(g, SPR.barrier, x, fy, s, fa); }
+    else if (o.k === 'R') { shadow(g, x, fy, 18, s, 0.34 * fa); blit(g, SPR.reel[Math.floor(t * 8) & 1], x, fy, s, fa); }
     else if (o.k === 'F') {
-      if (o.pair) { const x2 = 96 + (o.lane + 0.5 - cx) * RUN_LW * s; shadow(g, x2, fy, 46, s, 0.3 * fa); blit(g, SPR.dolly, x2, fy, s, fa); }
-      else { shadow(g, x, fy, 22, s, 0.3 * fa); blit(g, o.var === 1 ? SPR.cart : SPR.fork, x, fy, s, fa); if (o.var !== 1 && (Math.floor(t * 4) & 1)) R(g, x - 2 * s, fy - 53 * s, Math.max(1, 4 * s), Math.max(1, 3 * s), '#ff9a9a'); }
+      if (o.pair) { const x2 = px3(o.lane + 0.5, zr, s, cx); shadow(g, x2, fy, 46, s, 0.34 * fa); blit(g, SPR.dolly, x2, fy, s, fa); }
+      else { shadow(g, x, fy, 22, s, 0.34 * fa); blit(g, o.var === 1 ? SPR.cart : SPR.fork, x, fy, s, fa); if (o.var !== 1 && (Math.floor(t * 4) & 1)) R(g, x - 2 * s, fy - 53 * s, Math.max(1, 4 * s), Math.max(1, 3 * s), '#ff9a9a'); }
     }
     else if (o.k === 'H') {
       const by = fy - 30 * s, img = o.var === 1 ? SPR.pipe : SPR.blade;
       const ceil = fy - RUN_CEIL * s, w = Math.max(1, Math.round(2 * s));
-      g.globalAlpha = fa; fc(g, runFc(DGR, s));
+      g.globalAlpha = fa; fc(g, runFc(DGR, s, 1, ZT(o.z)));
       for (const dx of [-17, 17]) g.fillRect(Math.round(x + dx * s - w / 2), Math.round(ceil), w, Math.max(1, Math.round(by - 14 * s - ceil)));
       g.globalAlpha = 1;
       blit(g, img, x, by, s, fa);
-      shadow(g, x, fy, 20, s, 0.22 * fa);
+      shadow(g, x, fy, 20, s, 0.26 * fa);
     }
     else if (o.k === 'W') {
-      const xc = 96 - cx * RUN_LW * s, hw = 1.72 * RUN_LW * s, ceil = fy - RUN_CEIL * s, by = fy - 30 * s, th = 16 * s;
+      const xc = px3(0, zr, s, cx), hw = 1.72 * RUN_LW * s, ceil = fy - RUN_CEIL * s, by = fy - 30 * s, th = 16 * s;
       g.globalAlpha = fa;
       R(g, xc - hw - 3 * s, ceil, 6 * s + 1, fy - ceil, BLK); R(g, xc + hw - 3 * s, ceil, 6 * s + 1, fy - ceil, BLK);
       R(g, xc - hw - 2 * s, ceil, Math.max(1, 4 * s), fy - ceil, '#3a8fd8'); R(g, xc + hw - 2 * s, ceil, Math.max(1, 4 * s), fy - ceil, '#3a8fd8');
@@ -704,25 +865,25 @@ function makeRunner(seed, skin) {
       for (let i = 0; i < n; i++) R(g, xc - hw + i * sw, by - th, Math.ceil(sw), th, (i & 1) ? WHT : RED);
       if (Math.floor(t * 5) & 1) D(g, xc, by - th - 3 * s, Math.max(1, Math.round(3 * s)), '#ff6a6a');
       g.globalAlpha = 1;
-      shadow(g, xc, fy, 60, s, 0.18 * fa);
+      shadow(g, xc, fy, 60, s, 0.2 * fa);
     }
   }
   function drawCoin(g, c, i, cx) {
-    const zr = c.z - pz, s = runS(zr), fy = runFy(s), x = 96 + (c.lane - cx) * RUN_LW * s, fa = fadeA(s);
+    const zr = c.z - pz, s = runS(zr), fy = runFy(s), x = px3(c.lane, zr, s, cx), fa = fadeA(s), SPR = sprAt(c.z);
     const f = (Math.floor(t * 9) + i) & 3, y = fy - (c.h + 6) * s;
     if (c.h > 12) shadow(g, x, fy, 5, s, 0.22 * fa);
     blit(g, SPR.coin[f], x, y + 5.5 * s, s * 1.15, fa);
     if (((Math.floor(t * 6) + i * 3) % 12) === 0) blit(g, SPR.glint, x, y + 5.5 * s, s * 0.9, fa);
   }
   function drawProp(g, h, sd, z, cx) {
-    const zr = z - pz, s = runS(zr), fy = runFy(s), fa = fadeA(s), sg = sd ? 1 : -1;
+    const zr = z - pz, s = runS(zr), fy = runFy(s), fa = fadeA(s), sg = sd ? 1 : -1, SPR = sprAt(z);
     const kind = h % 10, lat = sg * (1.95 + ((h >>> 12) % 4) * 0.12);
     let img, off = 0;
     if (kind < 4) { img = SPR.jig[(h >>> 5) & 1]; off = 0.3; }
     else if (kind === 4) img = SPR.rack; else if (kind === 5) img = SPR.stack; else if (kind === 6) img = SPR.cartP;
     else if (kind === 7) img = SPR.reelP; else if (kind === 8) img = SPR.welder; else img = SPR.stack;
-    const x = 96 + (lat + sg * off - cx) * RUN_LW * s;
-    shadow(g, x, fy, img.width * 0.4, s, 0.25 * fa);
+    const x = px3(lat + sg * off, zr, s, cx);
+    shadow(g, x, fy, img.width * 0.4, s, 0.28 * fa);
     blit(g, img, x, fy, s, fa);
     if (kind === 8 && s > 0.12) {   /* welder sparks */
       const k = Math.floor(t * 20 + h) % 3;
@@ -730,13 +891,15 @@ function makeRunner(seed, skin) {
     }
   }
 
-  /* ---------- the runner (from behind) ---------- */
+  /* ---------- the runner (from behind) and the foreman chasing him ---------- */
   function drawRunner(g, cx) {
-    if (inv > 0 && !me.over && (Math.floor(t * 20) & 1) && stumbleT <= 0) return;
-    const bx = 96 + (px - cx) * RUN_LW, fy = RUN_YP - yj, M = skin.main, Dk = skin.dark, Li = skin.light;
+    if (inv > 0 && !me.over && boostT <= 0 && (Math.floor(t * 20) & 1) && stumbleT <= 0) return;
+    const bx = runnerX(), fy = RUN_YP - yj, M = skin.main, Dk = skin.dark, Li = skin.light;
     const ph = stepPh % 1, sw = Math.sin(ph * 6.283), air = yj > 0.5, sl = slideT > 0 && !air, stum = stumbleT > 0 || (me.over && !won);
-    g.globalAlpha = 0.38 - Math.min(0.2, yj * 0.006); E(g, bx, RUN_YP, 10 - yj * 0.1, 3, BLK); g.globalAlpha = 1;
+    g.globalAlpha = 0.4 - Math.min(0.2, yj * 0.006); E(g, bx, RUN_YP, 10 - yj * 0.1, 3, BLK); g.globalAlpha = 1;
     const x = Math.round(bx), y0 = Math.round(fy);
+    if (shield) { g.globalAlpha = 0.28 + 0.1 * Math.sin(t * 10); D(g, x, y0 - 22, 24, '#29adff'); g.globalAlpha = 0.8; for (let a = 0; a < 20; a++) P(g, x + Math.cos(a / 20 * 6.283) * 24, y0 - 22 + Math.sin(a / 20 * 6.283) * 24, '#bfe8ff'); g.globalAlpha = 1; }
+    if (boostT > 0) { g.globalAlpha = 0.35; D(g, x, y0 - 20, 20, '#ffd21a'); g.globalAlpha = 1; }
     if (sl) {
       R(g, x - 9, y0 - 4, 7, 4, BLK); R(g, x + 2, y0 - 4, 7, 4, BLK); R(g, x - 8, y0 - 5, 5, 4, Dk); R(g, x + 3, y0 - 5, 5, 4, Dk);
       R(g, x - 10, y0 - 14, 20, 10, BLK); R(g, x - 9, y0 - 13, 18, 8, M); R(g, x - 9, y0 - 10, 18, 2, Li); R(g, x - 9, y0 - 6, 18, 1, Dk);
@@ -748,6 +911,7 @@ function makeRunner(seed, skin) {
     if (air) { l1 = 4; l2 = 7; a1 = -9; a2 = -11; }
     else { l1 = Math.max(0, sw) * 6; l2 = Math.max(0, -sw) * 6; a1 = sw * 4; a2 = -sw * 4; }
     if (stum) { a1 = -10; a2 = -8; lean = Math.sin(t * 40) * 1.2; }
+    if (mt < 1 && !air) lean += (tl - fromL) * 2;
     const bob = air ? 0 : Math.abs(sw) * -1.2;
     const X = x + Math.round(lean), Y = y0 + Math.round(bob);
     const leg = (lx, lift, side) => {
@@ -763,27 +927,42 @@ function makeRunner(seed, skin) {
     E(g, X, Y - 42, 6, 4, BLK); E(g, X, Y - 42, 5, 3, Li); R(g, X - 1, Y - 45, 2, 5, M); R(g, X - 7, Y - 39, 14, 2, BLK); R(g, X - 6, Y - 39, 12, 1, Dk);
     if (stum && (Math.floor(t * 14) & 1)) R(g, X - 6, Y - 33, 12, 2, '#ffffff');
   }
+  function drawBoss(g) {
+    if (near <= 0.02 && !caught) return;
+    const nr = caught ? 1 : near, SP = sprAt(pz), x = 96 + (lagX - cam()) * RUN_LW, f = Math.floor(bossPh) & 1;
+    const fy = 352 + (1 - nr) * 100 - (caught ? Math.min(40, overT * 60) : 0), bob = Math.abs(Math.sin(bossPh * 1.5)) * 3;
+    g.globalAlpha = 0.35; E(g, x, fy + 2, 22, 4, BLK); g.globalAlpha = 1;
+    blit(g, SP.foreman[f], x, fy - bob, 1.45, 1);
+  }
 
   /* ---------- HUD ---------- */
   function mmss(sec) { sec = Math.max(0, Math.ceil(sec)); return Math.floor(sec / 60) + ':' + (sec % 60 < 10 ? '0' : '') + (sec % 60); }
-  function hat(g, x, y, on) {
-    const c = on ? YEL : DGR; R(g, x - 5, y + 4, 11, 3, BLK); E(g, x, y + 3, 5, 4, BLK); E(g, x, y + 3, 4, 3, c); R(g, x - 4, y + 4, 9, 2, on ? ORG : DGR); R(g, x - 1, y - 1, 2, 4, on ? WHT : LGR);
-  }
   function drawHUD(g) {
     g.globalAlpha = 0.5; R(g, 0, 0, VW, 52, BLK); g.globalAlpha = 0.3; R(g, 0, 52, VW, 3, BLK); g.globalAlpha = 1;
     const rem = RUN_CAP - t;
-    T(g, RUN_TEXT.clock, 4, 3, YEL, { sh: BLK }); T(g, mmss(rem), 4 + tw(RUN_TEXT.clock) + 6, 3, rem < 10 ? ((Math.floor(t * 4) & 1) ? RED : WHT) : WHT, { sh: BLK });
+    T(g, RUN_TEXT.job, 4, 3, ORG, { sh: BLK }); T(g, mmss(rem), 4 + tw(RUN_TEXT.job) + 6, 3, rem < 10 ? ((Math.floor(t * 4) & 1) ? RED : WHT) : WHT, { sh: BLK });
     R(g, 3, 13, 123, 8, BLK); R(g, 4, 14, 121, 6, NAVY);
     const fr = clamp(t / RUN_CAP, 0, 1), fw = Math.round(121 * fr);
     R(g, 4, 14, fw, 6, fr > 0.8 ? LIME : fr > 0.5 ? YEL : ORG); R(g, 4, 14, fw, 2, WHT);
     for (let i = 1; i < 5; i++) R(g, 4 + i * 24, 14, 1, 6, BLK);
     R(g, 4 + fw - 1, 12, 3, 10, WHT);
-    D(g, 134, 17, 6, BLK); D(g, 134, 17, 5, WHT); L(g, 134, 17, 134, 13, BLK); L(g, 134, 17, 137, 17, BLK); P(g, 134, 17, RED);
+    /* the rush order crate waiting at the end of the bar */
+    R(g, 129, 11, 13, 11, BLK); R(g, 130, 12, 11, 9, '#c98b4a'); R(g, 130, 12, 11, 2, YEL); L(g, 131, 15, 139, 20, '#8a5a2b'); L(g, 139, 15, 131, 20, '#8a5a2b');
     T(g, String(Math.floor(me.score)), 4, 25, WHT, { s: 2, sh: BLK });
     T(g, Math.floor(pz) + 'M', 4, 42, LGR, { sh: BLK });
-    blit(g, SPR.coin[0], 62, 50, 1, 1); T(g, 'x' + quarters, 70, 42, YEL, { sh: BLK });
-    for (let i = 0; i < 3; i++) hat(g, 160 + i * 12, 30, i < lives);
-    if (chain >= 2) T(g, 'CHAIN ' + chain, 188, 42, LIME, { al: 'r', sh: BLK });
+    blit(g, runSprites(0).coin[0], 62, 50, 1, 1); T(g, 'x' + quarters, 70, 42, YEL, { sh: BLK });
+    T(g, 'BEST ' + Math.max(RUN_BEST, Math.floor(me.score)), 188, 3 + 0, LGR, { al: 'r' });
+    /* threat meter: the foreman */
+    const th = near > 0.1;
+    g.globalAlpha = 1; R(g, 150, 22, 38, 14, BLK); R(g, 151, 23, 36, 12, th ? ((Math.floor(t * 6) & 1) ? '#7a0a1a' : '#3a0610') : '#1d2b53');
+    E(g, 160, 32, 5, 4, BLK); E(g, 160, 31, 4, 3, th ? '#ff4d4d' : DGR); R(g, 155, 31, 11, 2, BLK); R(g, 156, 31, 9, 1, th ? '#ff9a9a' : LGR);
+    R(g, 168, 26, 16, 6, BLK); R(g, 169, 27, 14, 4, DGR); R(g, 169, 27, Math.round(14 * clamp(near, 0, 1)), 4, near > 0.5 ? RED : ORG);
+    if (shield) { D(g, 172, 31, 3, '#29adff'); }
+    if (chain >= 2) T(g, 'CHAIN ' + chain, 84, 28, LIME, { sh: BLK });
+    /* active power-ups */
+    let px0 = 4; const sp = runSprites(0).pup;
+    const chip = (img, frac) => { blit(g, img, px0 + 9, 76, 0.7, 1); R(g, px0, 78, 14, 3, BLK); R(g, px0 + 1, 79, Math.round(12 * frac), 1, WHT); px0 += 18; };
+    if (magnetT > 0) chip(sp.M, magnetT / 8); if (x2T > 0) chip(sp.X, x2T / 10); if (boostT > 0) chip(sp.B, boostT / 3.2); if (shield) chip(sp.S, 1);
   }
   function drawPops(g) {
     for (const p of pops) {
@@ -792,7 +971,9 @@ function makeRunner(seed, skin) {
     }
     if (mTxt > 0) {
       const k = mTxt / 1.6, y = 80 - (1 - k) * 10; g.globalAlpha = Math.min(1, k * 3);
-      T(g, mm + 'M!', 96, y, YEL, { al: 'c', s: 3, sh: BLK, ol: BLK }); T(g, 'KEEP RUNNING', 96, y + 26, WHT, { al: 'c', sh: BLK }); g.globalAlpha = 1;
+      if (mm < 0) { T(g, ZT(pz).n, 96, y, YEL, { al: 'c', s: 2, sh: BLK, ol: BLK }); T(g, 'NEW ZONE', 96, y + 20, WHT, { al: 'c', sh: BLK }); }
+      else { T(g, mm + 'M!', 96, y, YEL, { al: 'c', s: 3, sh: BLK, ol: BLK }); T(g, 'KEEP RUNNING', 96, y + 26, WHT, { al: 'c', sh: BLK }); }
+      g.globalAlpha = 1;
     }
   }
   function drawHints(g) {
@@ -802,50 +983,52 @@ function makeRunner(seed, skin) {
     arrowV(g, 96, cy - 40, -1, 11, YEL); T(g, 'JUMP', 96, cy - 26, YEL, { al: 'c', sh: BLK, ol: BLK });
     arrowV(g, 96, cy + 52, 1, 11, SKY); T(g, 'SLIDE', 96, cy + 28, SKY, { al: 'c', sh: BLK, ol: BLK });
     arrowH(g, 34, cy + 2, -1, 11, LIME); arrowH(g, 158, cy + 2, 1, 11, LIME);
-    T(g, 'SWIPE', 96, cy - 6, WHT, { al: 'c', sh: BLK, ol: BLK }); T(g, 'LANES', 96, cy + 4, LIME, { al: 'c', sh: BLK, ol: BLK });
+    T(g, 'SWIPE OR TAP', 96, cy - 6, WHT, { al: 'c', sh: BLK, ol: BLK }); T(g, 'SIDES = LANES', 96, cy + 4, LIME, { al: 'c', sh: BLK, ol: BLK });
     g.globalAlpha = 1;
   }
 
   /* ---------- main draw ---------- */
   me.draw = g => {
-    const cx = cam();
+    setCam(); const cx = cam(), TZn = ZT(pz + 14), bgi = zth(pz + 14);
     g.save(); g.imageSmoothingEnabled = false;
-    R(g, 0, 0, VW, VH, TH.fog);
+    R(g, 0, 0, VW, VH, TZn.out ? '#1d2b53' : TZn.ceilD);
     g.translate(Math.round(shx), Math.round(shy));
-    g.drawImage(BG, 0, 0);
+    g.drawImage(runBg(bgi), 0, rzH - RUN_HZ);
     drawCeil(g, cx); drawFloor(g, cx); drawWalls(g, cx); drawDecals(g, cx);
     const items = collectItems(cx); for (const i of items) i.fn(g);
-    if (gateZ >= 0) {   /* end of shift: the time clock sails in */
+    if (gateZ >= 0) {   /* end of shift: the loading dock sails in */
       const zr = Math.max(-4.5, gateZ - pz);
-      if (zr < RUN_ZV && zr > -4.4) { const s = runS(zr), fy = runFy(s); blit(g, SPR.gate, 96 - cx * RUN_LW * s, fy - 188 * s, s, 1); }
+      if (zr < RUN_ZV && zr > -4.4) { const s = runS(zr), fy = runFy(s); blit(g, sprAt(gateZ).gate, px3(0, zr, s, cx), fy - 188 * s, s, 1); }
     }
     if (sf > 0.05) {
-      g.globalAlpha = 0.3 * sf;
+      g.globalAlpha = 0.3 * Math.min(1, sf);
       for (const L2 of lines) { const c1 = Math.cos(L2.a), s1 = Math.sin(L2.a), r0 = L2.r, r1 = L2.r + 12 + v * 0.8; L(g, 96 + c1 * r0, 132 + s1 * r0 * 1.3, 96 + c1 * r1, 132 + s1 * r1 * 1.3, '#ffffff'); }
       g.globalAlpha = 1;
     }
-    drawRunner(g, cx);
+    drawRunner(g, cx); drawBoss(g);
     for (const p of parts) { g.globalAlpha = Math.min(1, p.l / p.ml * 1.6); fc(g, p.c); g.fillRect(Math.round(p.x), Math.round(p.y), p.s, p.s); }
     g.globalAlpha = 1;
     g.restore();
+    if (near > 0.12 && !me.over) { const pu = 0.18 + 0.14 * Math.sin(t * 12); g.globalAlpha = pu * Math.min(1, near * 1.6); R(g, 0, 0, 5, VH, RED); R(g, VW - 5, 0, 5, VH, RED); R(g, 0, VH - 8, VW, 8, RED); g.globalAlpha = 1; if (Math.floor(t * 5) & 1) T(g, "DON'T TRIP!", 96, 60, RED, { al: 'c', sh: BLK, ol: BLK }); }
     if (flash > 0) { g.globalAlpha = Math.min(0.5, flash * 2.2); fc(g, flashC); g.fillRect(0, 0, VW, VH); g.globalAlpha = 1; }
     drawHints(g); drawPops(g); drawHUD(g);
     if (me.over) {
       const k = Math.min(1, overT / 0.35);
       g.globalAlpha = 0.5 * k; R(g, 0, 100, VW, 52, BLK); g.globalAlpha = k;
-      T(g, endMsg, 96, 112, won ? LIME : RED, { al: 'c', s: 2, sh: BLK, ol: BLK }); T(g, won ? 'BONUS +' + (250 + lives * 100) : 'DISTANCE ' + Math.floor(pz) + 'M', 96, 134, WHT, { al: 'c', sh: BLK });
+      T(g, endMsg, 96, 112, won ? LIME : RED, { al: 'c', s: 2, sh: BLK, ol: BLK }); T(g, won ? 'BONUS +' + (250 + (near < 0.1 ? 150 : 0)) : 'DISTANCE ' + Math.floor(pz) + 'M', 96, 134, WHT, { al: 'c', sh: BLK });
       g.globalAlpha = 1;
     }
   };
 
-  me.summary = () => [won ? 'CLOCKED IN ON TIME' : 'NEVER MADE THE CLOCK', 'DISTANCE ' + Math.floor(pz) + 'M', 'QUARTERS ' + quarters + '  CHAIN ' + bestChain, 'NEAR MISSES ' + nearMiss, 'BONUS ' + bonusPts];
-  me.theme = () => TH.n;
+  me.summary = () => [won ? RUN_TEXT.win : 'THE FOREMAN GOT YOU', 'DISTANCE ' + Math.floor(pz) + 'M', 'QUARTERS ' + quarters + '  CHAIN ' + bestChain, 'NEAR MISSES ' + nearMiss, newBest ? 'NEW SESSION BEST!' : 'SESSION BEST ' + RUN_BEST];
+  me.theme = () => RUN_THEMES[s0].n;
   me.rows = () => rowsG.map(r => ({ z: r.z, c: r.c.slice() }));
   me.debug = () => {
     const nxt = []; for (let i = oi; i < objs.length && nxt.length < 14; i++) { const o = objs[i]; if (o.k === 'U' || o.z + o.len < pz - 0.5) continue; if (o.z > pz + 90) break; nxt.push({ k: o.k, lane: o.lane, dz: o.z - pz, len: o.len, hit: o.hit }); }
-    return { t: +t.toFixed(3), z: pz, v: v, vnom: runVt(t), lane: tl, x: px, y: yj, vy: vy, sliding: slideT > 0, lives: lives, inv: inv, score: me.score, q: quarters, nm: nearMiss, chain: chain, hits: hits,
-      over: me.over, ended: me.ended, won: won, th: TH.n, thi: thi, nxt: nxt, acts: acts, hitLog: hitLog, pen: pen, parts: parts.length, bad: !(isFinite(pz) && isFinite(px) && isFinite(yj) && isFinite(v)) };
+    return { t: +t.toFixed(3), z: pz, v: v, vnom: runVt(t), lane: tl, cl: cl, x: px, y: yj, vy: vy, sliding: slideT > 0, lives: near > 0.1 ? 1 : 2, near: near, shield: shield, magnet: magnetT, x2: x2T, boost: boostT, caught: caught, inv: inv, score: me.score, q: quarters, nm: nearMiss, chain: chain, hits: hits,
+      over: me.over, ended: me.ended, won: won, th: me.theme(), zone: ZT(pz).n, thi: s0, nxt: nxt, acts: acts, hitLog: hitLog, pen: pen, parts: parts.length, mt: mt, bad: !(isFinite(pz) && isFinite(px) && isFinite(yj) && isFinite(v)) };
   };
+  me.__pups = () => pups;
   return me;
 }
 
@@ -882,7 +1065,7 @@ function runArt(g, x, y, w, h) {
 }
 
 const DEF_RUNNER = {
-  name: 'POND RUNNER', short: 'Pond Runner', series: { name: 'RUNNING', icon: 'flag' }, tag: 'LATE FOR WORK', color: LIME, make: makeRunner,
-  how: ['>SWIPE', 'UP JUMP. DOWN SLIDE.', 'LEFT OR RIGHT: NEW LANE.', '>READ THE FLOOR', 'YELLOW STRIPES: JUMP IT.', 'RED OVERHEAD: SLIDE UNDER.', 'BIG BLUE STUFF: GO AROUND.', '>CLOCK IN', 'REACH THE CLOCK IN 75S.', 'GRAB QUARTERS. CHAIN THEM.', 'CLOSE CALLS PAY. 3 HATS.', 'FASTER EVERY STEP.'],
+  name: 'POND RUNNER', short: 'Pond Runner', series: { name: 'RUNNING', icon: 'flag' }, tag: 'HOT JOB', color: LIME, make: makeRunner,
+  how: ['>SWIPE OR TAP SIDES', 'UP JUMP. DOWN SLIDE.', 'LEFT/RIGHT: ONE LANE.', '>READ THE FLOOR', 'YELLOW STRIPES: JUMP.', 'RED OVERHEAD: SLIDE.', 'BLUE VEHICLES: GO AROUND.', 'ORANGE PIT WARNING: JUMP.', '>HOT JOB', 'SHIP THE ORDER IN 75S.', 'TRIP: FOREMAN CLOSES IN.', 'TRIP TWICE: CAUGHT!', 'GRAB HAT/COFFEE/MAGNET/BOLT'],
   art: runArt
 };
