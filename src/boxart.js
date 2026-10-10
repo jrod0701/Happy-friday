@@ -87,9 +87,9 @@ function boxArt(def, cv) {
   T(g, 'FRIDAY', 48, 85, ORG); T(g, 'SYSTEM', 48, 94, ORG);
   // series badge (slanted, like the old ones)
   const bx = 6, by = 103;
-  PG(g, [[bx + 4, by], [bx + 52, by - 2], [bx + 48, by + 21], [bx, by + 21]], WHT); PG(g, [[bx + 5, by + 1], [bx + 51, by - 1], [bx + 47, by + 20], [bx + 1, by + 20]], BLK);
+  PG(g, [[bx + 4, by], [bx + 58, by - 2], [bx + 54, by + 21], [bx, by + 21]], WHT); PG(g, [[bx + 5, by + 1], [bx + 57, by - 1], [bx + 53, by + 20], [bx + 1, by + 20]], BLK);
   const s = def.series || { name: 'ACTION', icon: 'burst' };
-  seriesIcon(g, bx + 26, by + 7, s.icon); T(g, s.name, bx + 25, by + 13, WHT, { al: 'c' });
+  seriesIcon(g, bx + 29, by + 7, s.icon); T(g, s.name, bx + 28, by + 13, WHT, { al: 'c' });
   // gold seal of our own
   const sx0 = 78, sy0 = 115; const rim = []; for (let i = 0; i < 22; i++) { const an = i / 22 * 6.283, rr = i % 2 ? 10 : 11.5; rim.push([sx0 + Math.cos(an) * rr, sy0 + Math.sin(an) * rr]); }
   PG(g, rim, BRN, 1); PG(g, rim, ORG); D(g, sx0, sy0, 8, BRN); D(g, sx0, sy0, 7, YEL);

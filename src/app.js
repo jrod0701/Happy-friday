@@ -4,13 +4,14 @@ const TAG = { Jarrod: 'Evelwaze', Harvey: 'agoodtime2die', Anthony: 'TheMole' };
 const tag = p => TAG[p] || p;
 const PCOL = { Jarrod: '#ffa300', Harvey: '#29adff', Anthony: '#83769c' };
 // the game pool. add a DEF_* here and it joins the rotation; each match deals 3 from the pool by its seed
-const POOL = [DEF_LOB, DEF_SNIPER, DEF_SUMMIT, DEF_KONG, DEF_WHEELMAN, DEF_DUEL, DEF_MAYHEM];
+const POOL = [DEF_LOB, DEF_SNIPER, DEF_SUMMIT, DEF_KONG, DEF_WHEELMAN, DEF_DUEL, DEF_MAYHEM, DEF_RUNNER, DEF_MAILMAN];
 let match = null;
 let pendingSeed = seedOf('hf-next-' + Date.now().toString(36) + Math.random());
+const LYNCHPINS = [DEF_RUNNER, DEF_MAILMAN]; // dealt every round; the third slot rotates through the rest of the pool
 function lineup() {
-  const a = POOL.slice(), r = rng((match ? match.seed : pendingSeed) ^ 0x9e3779b9);
+  const a = POOL.filter(d => LYNCHPINS.indexOf(d) < 0), r = rng((match ? match.seed : pendingSeed) ^ 0x9e3779b9);
   for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); const t = a[i]; a[i] = a[j]; a[j] = t; }
-  return a.slice(0, 3);
+  return LYNCHPINS.concat(a.slice(0, 1));
 }
 const shortNames = () => lineup().map(d => d.short || d.name);
 const $ = s => document.querySelector(s);
