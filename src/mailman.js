@@ -292,7 +292,8 @@ function makeMailman(seed, skin) {
   const HZ = MAIL_HZ, CH = MAIL_CAMH, SB = MAIL_SB, LS = 1.5, HSC = MAIL_HS, GRAV = 250, DAY = G.day, WT = 1 + DAY * 0.06;
   const me = { score: 0, ended: false, over: false, settle: true };
   const houses = G.houses, SUBS = houses.filter(h => h.sub).length;
-  const haz = G.haz.map(h => Object.assign({ st: 0, t: 0, vx: 0, aim: 0, aimT: 0, bt: 0, x0: h.x, z0: h.z, car: Math.floor(rr() * 3), fan: 0, th: 0 }, h));
+  const MAIL_CUT = { hose: 1, ban: 1, man: 1, bigf: 1, tire: 1, sneak: 1 };   /* keep the neighbourhood grounded: no snakes, bigfoot or manholes */
+  const haz = G.haz.filter(h => !MAIL_CUT[h.k]).map(h => Object.assign({ st: 0, t: 0, vx: 0, aim: 0, aimT: 0, bt: 0, x0: h.x, z0: h.z, car: Math.floor(rr() * 3), fan: 0, th: 0 }, h));
   const crs = G.course, bags = G.bags.map(b => Object.assign({ got: 0 }, b));
   const flights = [], parts = [], pops = [], balloons = [], bubs = [];
   const amb = [], clouds = [], birds = [];
@@ -306,12 +307,12 @@ function makeMailman(seed, skin) {
   let t = 0, zp = 0, px = 0, ptx = 0, hold = 0, v = 0, bag = 16, lives = 3, combo = 0, maxCombo = 0, served = 0, smashed = 0, thrown = 0, wasted = 0, cancels = 0, delPts = 0, trainPts = 0, missedSubs = 0;
   let inv = 0, stum = 0, stumDir = 1, soak = 0, shake = 0, thA = 0, thSide = 1, ph = 0, endT = 0, endMsg = '', fin = false, finT = 0, comboFlash = 0, bonus = 0, bagFlash = 0, hitsTaken = 0, routeDone = false, perfectRoute = false, courseCrash = false, courseClear = false, puffT = 0, fan = 0, trainHits = 0;
   let drag = null, camX = 0, zcam = 0, rainOn = 0;
-  const mcv = z => { const c = G.curve; return Math.min(1, z / 500) * (c[0] * Math.sin(z / 260 + c[1]) + c[2] * Math.sin(z / 97 + c[3])); };
+  const mcv = z => 0;   /* straight street, like the original: readable and steady */
   function pj(lat, z) { const d = z - zcam; if (d < 0.5) return null; const s = 40 / (40 + d); return { x: VW / 2 + (mcv(z) + lat - camX) * s * LS, y: HZ + CH * s, s: s, d: d }; }
   function pop(x, y, s, c, sc) { if (pops.length > 9) pops.shift(); pops.push({ x: x, y: y, s: s, c: c, t: 0, sc: sc || 1 }); }
   function part(x, y, vx, vy, life, c, g2) { if (parts.length > 100) return; parts.push({ x: x, y: y, vx: vx, vy: vy, life: life, l0: life, c: c, g: g2 == null ? 220 : g2 }); }
   const pick = a => a[Math.floor(Math.random() * a.length)];
-  for (let i = 0; i < (TH.snow ? 46 : TH.leaf ? 26 : TH.rain ? 50 : 0); i++) amb.push({ x: rr() * VW, y: rr() * SB, vx: (rr() - 0.5) * 12, vy: TH.rain ? 150 + rr() * 60 : 14 + rr() * 22, ph: rr() * 6, c: TH.leaf ? [ORG, RED, YEL][i % 3] : WHT });
+  for (let i = 0; i < (TH.snow ? 30 : TH.leaf ? 9 : TH.rain ? 40 : 0); i++) amb.push({ x: rr() * VW, y: rr() * SB, vx: (rr() - 0.5) * 12, vy: TH.rain ? 150 + rr() * 60 : 14 + rr() * 22, ph: rr() * 6, c: TH.leaf ? [ORG, RED, YEL][i % 3] : WHT });
   for (let i = 0; i < 5; i++) clouds.push({ x: rr() * 260 - 30, y: 28 + rr() * 38, sp: 2 + rr() * 3, sz: 0.8 + rr() * 0.8 });
   for (let i = 0; i < 4; i++) birds.push({ k: i, ph: rr() * 6 });
   const houseOf = h => SPR.house[h.kind + '_' + h.pal][h.sub && !h.cancel ? 1 : 0];
@@ -516,14 +517,6 @@ function makeMailman(seed, skin) {
       R(g, cl - 1, y, 1, 1, TH.curb); R(g, cr, y, 1, 1, TH.curb);
       R(g, cl, y, cr - cl, 1, TH.road[far ? 0 : (Math.floor(zw / 22) & 1)]);
       if ((!far && (Math.floor(zw / 22) & 1) === 0) || (far && (Math.floor(zw / 40) & 1) === 0)) R(g, Math.round(cx - 1.3 * sL), y, Math.max(1, Math.round(2.6 * sL)), 1, TH.line);
-      if (!far) {
-        const hh = hash2(Math.floor(zw / 2.5), y >> 1);
-        if (TH.leaf && hh % 5 < 2) { const c = [ORG, RED, YEL, BRN][(hh >>> 12) & 3]; if (xl > 2) P(g, (hh >>> 4) % xl, y, c); if (VW - xr > 2) P(g, xr + (hh >>> 6) % (VW - xr), y, c); if ((hh >>> 9) % 4 === 0) P(g, cl + (hh >>> 5) % Math.max(1, cr - cl), y, c); }
-        else if (TH.snow && hh % 7 === 0) { if (xl > 2) P(g, (hh >>> 4) % xl, y, '#c2cde8'); if (VW - xr > 2) P(g, xr + (hh >>> 6) % (VW - xr), y, '#c2cde8'); }
-        else if (TH.rain && hh % 6 === 0) { const c = [PINK, WHT, YEL][(hh >>> 10) % 3]; if (xl > 2) P(g, (hh >>> 4) % xl, y, c); if (VW - xr > 2) P(g, xr + (hh >>> 6) % (VW - xr), y, c); }
-        else if (!TH.leaf && !TH.snow && hh % 9 === 0) { if (xl > 2) P(g, (hh >>> 4) % xl, y, TH.lawn[1 - band]); if (VW - xr > 2) P(g, xr + (hh >>> 6) % (VW - xr), y, TH.lawn[1 - band]); }
-        if (TH.snow && (hh >>> 3) % 6 === 0) P(g, cl + (hh >>> 5) % Math.max(1, cr - cl), y, '#9aa3bc');
-      }
     }
   }
   function shadow(g, x, y, w, a) { g.globalAlpha = a == null ? 0.3 : a; E(g, x, y, Math.max(1, Math.round(w)), Math.max(1, Math.round(w / 4)), BLK); g.globalAlpha = 1; }
@@ -541,9 +534,9 @@ function makeMailman(seed, skin) {
   function items(g) {
     const dr = [], nt = nextTargets(), HS = SPR.hz, DC = SPR.dc;
     bubs.length = 0;
-    const add = (z, f, off) => { const d = z - zcam; if (d < 0.6 || d > 440) return; dr.push({ d: d + (off || 0), f: f }); };
+    const add = (z, f, off) => { const d = z - zcam; if (d < 0.6 || d > 300) return; dr.push({ d: d + (off || 0), f: f }); };
     for (const h of houses) {
-      const d0 = h.z - zcam; if (d0 < 0.6 || d0 > 440) continue;
+      const d0 = h.z - zcam; if (d0 < 0.6 || d0 > 300) continue;
       const m = houseOf(h), dl = doorLat(h);
       dr.push({ d: d0 + 40, f: g2 => { quad(g2, h.side * 49, dl + (h.side > 0 ? 3 : -3), h.z - 9, h.z, TH.snow ? '#e0e6f4' : '#cfc6b4'); quad(g2, dl - 9, dl + 9, h.z - 12, h.z - 9, TH.snow ? '#dde3f2' : '#b8ae9c'); } });
       dr.push({ d: d0 + 1, f: g2 => {
@@ -574,7 +567,7 @@ function makeMailman(seed, skin) {
       } });
     }
     for (const q of G.deco) {
-      const d0 = q.z - zcam; if (d0 < 0.6 || d0 > 440) continue;
+      const d0 = q.z - zcam; if (d0 < 0.6 || d0 > 300) continue;
       if (q.k === 'drive' || q.k === 'drivecar' || q.k === 'wash') dr.push({ d: d0 + 45, f: g2 => { quad(g2, q.side * 49, q.side * 118, q.z - 15, q.z + 15, TH.snow ? '#d4dae8' : '#9a9aa6'); } });
       dr.push({ d: d0, f: g2 => {
         const p = pj(q.x, q.z); if (!p) return; const sl = p.s * LS, x = p.x, y = p.y;
@@ -597,14 +590,9 @@ function makeMailman(seed, skin) {
     }
     for (const q of G.puddles) { const d0 = q.z - zcam; if (d0 < 0.6 || d0 > 300) continue; dr.push({ d: d0 + 30, f: g2 => { const p = pj(q.x, q.z); if (p) mailBlit(g2, DC.puddle, p.x, p.y + 3 * p.s, p.s * LS * 1.1); } }); }
     for (const q of G.lamps) add(q.z, g2 => { const p = pj(q.x, q.z); if (p) mailBlit(g2, SPR.lamp, p.x, p.y, p.s * LS * 1.1); }, -0.2);
-    for (const q of G.bunt) add(q.z, g2 => {
-      const a = pj(-54, q.z), b = pj(54, q.z); if (!a || !b || a.s < 0.1) return; const cols = [RED, YEL, SKY, LIME, PINK, ORG];
-      let lx = a.x, ly = a.y - 64 * a.s * LS;
-      for (let i = 1; i <= 12; i++) { const u = i / 12, x = a.x + (b.x - a.x) * u, y = a.y + (b.y - a.y) * u - 64 * a.s * LS + Math.sin(u * 3.14) * 9 * a.s * LS; L(g2, lx, ly, x, y, BLK, 1); const w = Math.max(2, Math.round(5 * a.s * LS)); PG(g2, [[x - w / 2, y], [x + w / 2, y], [x, y + w * 1.3]], cols[i % 6]); lx = x; ly = y; }
-    }, -0.3);
     for (const b of bags) if (!b.got) add(b.z, g2 => { const p = pj(b.x, b.z); if (!p) return; shadow(g2, p.x, p.y, 8 * p.s * LS * 1.1); const bob = Math.sin(t * 5) * 2 * p.s; mailBlit(g2, HS.bag, p.x, p.y + bob - 3 * p.s, p.s * LS * 1.1); if (p.s > 0.3 && (Math.floor(t * 4) & 1)) { P(g2, p.x + 9 * p.s, p.y - 24 * p.s, WHT); P(g2, p.x - 9 * p.s, p.y - 18 * p.s, YEL); } });
     add(34, g2 => { const p = pj(100, 34); if (!p) return; quad(g2, 48, 150, 14, 52, TH.snow ? '#d4dae8' : '#9a9aa6'); mailBlit(g2, DC.truck, p.x, p.y, p.s * LS * 0.95); }, 0);
-    for (const h of haz) { if (h.st === 3 || h.z - zcam < 0.6 || h.z - zcam > 400) continue; dr.push({ d: h.z - zcam, f: g2 => drawHaz(g2, h) }); }
+    for (const h of haz) { if (h.st === 3 || h.z - zcam < 0.6 || h.z - zcam > 260) continue; dr.push({ d: h.z - zcam, f: g2 => drawHaz(g2, h) }); }
     for (const c of crs) {
       const d0 = c.z - zcam; if (d0 < 0.6 || d0 > 400) continue;
       dr.push({ d: d0, f: g2 => { const p = pj(c.x, c.z); if (!p) return; const sl = p.s * LS; if (c.k === 'target') { const wob = c.hit ? Math.sin(c.t * 22) * Math.max(0, 1 - c.t * 2) * 2 : 0; mailBlit(g2, DC.target[c.hit ? 1 : 0], p.x + wob, p.y, sl * 1.1); } else if (c.k === 'wall') { shadow(g2, p.x, p.y, 16 * sl); mailBlit(g2, DC.wall, p.x, p.y, sl); } else if (c.k === 'hay') { shadow(g2, p.x, p.y, 13 * sl); mailBlit(g2, DC.hay, p.x, p.y, sl); } else mailBlit(g2, DC.ditch, p.x, p.y + 2 * p.s, sl * 0.95); } });
@@ -676,7 +664,7 @@ function makeMailman(seed, skin) {
   }
   me.draw = g => {
     g.imageSmoothingEnabled = false;
-    zcam = zp - MAIL_CAMD; camX = mcv(zcam) + px * 0.5;
+    zcam = zp - MAIL_CAMD; camX = 0;
     R(g, 0, 0, VW, VH, BLK);
     g.save(); g.beginPath(); g.rect(0, 22, VW, SB - 22); g.clip();
     if (shake > 0) g.translate(Math.round((Math.random() - 0.5) * shake), Math.round((Math.random() - 0.5) * shake));
@@ -686,7 +674,7 @@ function makeMailman(seed, skin) {
     ground(g); items(g); fogOverlay(g);
     if (TH.rain && rainOn) { g.fillStyle = 'rgba(90,110,140,0.14)'; g.fillRect(0, 22, VW, SB - 22); for (const a of amb) L(g, a.x, a.y, a.x - 2, a.y + 6, '#c4d8ee', 1); }
     else if (TH.snow) for (const a of amb) R(g, a.x, a.y, 2, 2, WHT);
-    else for (const a of amb) R(g, a.x, a.y, 2, 1, a.c);
+    else for (const a of amb) { R(g, a.x - 1, a.y, 4, 2, a.c); P(g, a.x + (Math.sin(t * 3 + a.ph) > 0 ? 2 : -1), a.y - 1, a.c); }
     for (const q of parts) { g.globalAlpha = Math.min(1, q.life / q.l0 * 1.5); R(g, q.x, q.y, 2, 2, q.c); } g.globalAlpha = 1;
     for (const b of bubs) bubble(g, b.x, b.y, b.txt, b.type);
     for (const q of pops) { const sc = q.sc, w = tw(q.s, sc); T(g, q.s, clamp(q.x, 4 + w / 2, VW - 4 - w / 2), q.y - q.t * 18, q.c, { al: 'c', ol: BLK, s: sc }); }

@@ -327,8 +327,9 @@ function makeSummit(seed, skin) {
     const m = Math.floor(time / 60), s = Math.floor(time % 60);
     T(g, m + ':' + (s < 10 ? '0' : '') + s, 96, 12, time < 10 ? RED : LGR, { al: 'c' });
     T(g, String(Math.round(me.score)), VW - 19, 6, YEL, { al: 'r', sh: BLK });
-    if (best === 0 && !me.over && time > 74) { if (Math.floor(t * 2) & 1) T(g, 'JUMP INTO THE ICE ABOVE YOU', 96, VT + 8, WHT, { al: 'c', ol: BLK }); }
-    if (best === 0 && !me.over && time <= 74 && time > 66) T(g, 'BREAK A BLOCK, THEN CLIMB', 96, VT + 8, WHT, { al: 'c', ol: BLK });
+    const hint = str => { const w = tw(str) + 8; g.globalAlpha = 0.8; R(g, 96 - w / 2, VT + 4, w, 14, BLK); g.globalAlpha = 1; T(g, str, 96, VT + 8, WHT, { al: 'c' }); };
+    if (best === 0 && !me.over && time > 74) hint('BONK THE ICE ABOVE YOU');
+    if (best === 0 && !me.over && time <= 74 && time > 66) hint('BREAK A BLOCK, THEN CLIMB');
     if (me.over) {
       R(g, 0, 120, VW, 54, 'rgba(14,12,26,.78)');
       T(g, endMsg, 96, 130, summit ? YEL : endMsg === 'TIME UP' ? WHT : RED, { al: 'c', s: tw(endMsg, 2) <= 176 ? 2 : 1, ol: BLK });

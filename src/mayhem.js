@@ -181,7 +181,7 @@ function myCity(seed, TH, r) {
   for (let i = W.peds.length - 1; i >= 0; i--) if (drop[tiOf(W.peds[i])]) W.peds.splice(i, 1);
   for (let i = W.statics.length - 1; i >= 0; i--) { const p = W.statics[i]; if ((p.k === 'tree' && (drop[tiOf(p)] || Math.hypot(p.x - cx * 8, p.y - cy * 8) < 62)) || (p.k === 'fountain' && Math.hypot(p.x - cx * 8, p.y - cy * 8) > 1 && Math.hypot(p.x - cx * 8, p.y - cy * 8) < 85)) W.statics.splice(i, 1); }
   for (let y = R0; y < RE; y++) for (let x = R0; x < RE; x++) { const v = map.t[y * N + x]; if (v === 2 || (v === 0 && (x * 7 + y * 3) % 5 === 0)) W.walk.push([x * 8 + 4, y * 8 + 4]); }
-  for (let i = 0; i < 110; i++) { const w = W.walk[Math.floor(r() * W.walk.length)]; if (map.t[Math.floor(w[1] / 8) * N + Math.floor(w[0] / 8)] === 2) mkPed(w[0], w[1]); }
+  for (let i = 0; i < 45; i++) { const w = W.walk[Math.floor(r() * W.walk.length)]; if (map.t[Math.floor(w[1] / 8) * N + Math.floor(w[0] / 8)] === 2) mkPed(w[0], w[1]); }
   for (let i = 0; i < 14; i++) {
     const vert = r() < 0.5, k = Math.floor(r() * (MY_NB + 1)), s = Math.floor(r() * MY_NB), off = pick([-10, 10, 0]);
     const cx2 = vert ? myNode(k) + off : myNode(s) + 64, cy2 = vert ? myNode(s) + 64 : myNode(k) + off;
@@ -849,14 +849,14 @@ function makeMayhem(seed, skin) {
       for (let f = -7; f < 7; f++) { R(g, x + ca * f + px * 9, y + sa * f + py * 9, 1, 1, BLK); R(g, x + ca * f - px * 9, y + sa * f - py * 9, 1, 1, BLK); }
       for (const f of [-3, 0, 3]) { const bx = x + ca * f, by = y + sa * f; L(g, bx - ca * 1 + px * 3, by - sa * 1 + py * 3, bx + ca * 1, by + sa * 1, BLK, 1); L(g, bx - ca * 1 - px * 3, by - sa * 1 - py * 3, bx + ca * 1, by + sa * 1, BLK, 1); }
     }
-    for (const rp of ramps) { const x = rp.x + ox, y = rp.y + oy - 12 - Math.sin(t * 5) * 1.5; if (!onScr(x, y, 20)) continue; myStar(g, x, y, 5, (Math.floor(t * 4) & 1) ? YEL : ORG, BLK, t * 2, 0.5); T(g, 'JUMP', x, y - 12, WHT, { al: 'c', ol: BLK }); }
+    for (const rp of ramps) { const x = rp.x + ox, y = rp.y + oy - 12 - Math.sin(t * 5) * 1.5; if (!onScr(x, y, 20)) continue; myStar(g, x, y, 5, (Math.floor(t * 4) & 1) ? YEL : ORG, BLK, t * 2, 0.5); }
     // gold coin trails
     for (const q of gold) { const x = Math.round(q.x + ox), y = Math.round(q.y + oy - 3 - Math.sin(t * 6 + q.ph) * 1.5); if (!onScr(x, y, 8)) continue; R(g, x - 3, y - 3, 7, 7, BLK); R(g, x - 2, y - 3, 5, 7, YEL); R(g, x - 3, y - 2, 7, 5, YEL); const sh = Math.floor(t * 8 + q.ph * 3) % 6; R(g, x - 1, y - 2, 1, 4, sh < 2 ? WHT : ORG); if (sh === 0) P(g, x + 2, y - 3, WHT); }
     // spike strips
     for (const s of strips) { const x = s.x + ox, y = s.y + oy; if (!onScr(x, y, 20)) continue; const w = 24, h = 3; const bx = s.vert ? x - w / 2 : x - h / 2, by = s.vert ? y - h / 2 : y - w / 2, ww = s.vert ? w : h, hh = s.vert ? h : w; R(g, bx - 1, by - 1, ww + 2, hh + 2, BLK); R(g, bx, by, ww, hh, DGR); for (let i = 0; i < w; i += 3) { if (s.vert) { P(g, bx + i, by, WHT); P(g, bx + i + 1, by + 2, LGR); } else { P(g, bx, by + i, WHT); P(g, bx + 2, by + i + 1, LGR); } } if (!s.hit && (Math.floor(t * 4) & 1)) T(g, '!', x, y - 11, RED, { al: 'c', ol: BLK }); }
     // props
     for (const p of props) { if (!p.alive) continue; const x = Math.round(p.x + ox), y = Math.round(p.y + oy); if (!onScr(x, y, 10)) continue; if (p.k === 'cone') tdCone(g, x, y, 0, 0); else g.drawImage(myPropSpr(p.k), x - 8, y - 8); }
-    for (const p of props) { if (!p.alive || p.k !== 'bomb') continue; const x = Math.round(p.x + ox), y = Math.round(p.y + oy); if (!onScr(x, y, 14)) continue; if (Math.floor(t * 4 + x * 0.1) & 1) { R(g, x - 7, y - 7, 15, 1, YEL); R(g, x - 7, y + 7, 15, 1, YEL); R(g, x - 7, y - 7, 1, 15, YEL); R(g, x + 7, y - 7, 1, 15, YEL); } T(g, 'TNT', x, y - 15, (Math.floor(t * 4) & 1) ? RED : WHT, { al: 'c', ol: BLK }); }
+    for (const p of props) { if (!p.alive || p.k !== 'bomb') continue; const x = Math.round(p.x + ox), y = Math.round(p.y + oy); if (!onScr(x, y, 14)) continue; if (Math.floor(t * 4 + x * 0.1) & 1) { R(g, x - 7, y - 7, 15, 1, YEL); R(g, x - 7, y + 7, 15, 1, YEL); R(g, x - 7, y - 7, 1, 15, YEL); R(g, x + 7, y - 7, 1, 15, YEL); }  }
     for (const q of picks) {
       const x = Math.round(q.x + ox), bob = Math.sin(t * 4 + q.ph) * 2.5, y = Math.round(q.y + oy - 9 + bob); if (!onScr(x, y, 20)) continue;
       const P0 = PK[q.k], pulse = 0.55 + 0.45 * Math.sin(t * 7 + q.ph);

@@ -438,16 +438,16 @@ function makeRunner(seed, skin) {
   const parts = [], pops = [], lines = [];
   for (let i = 0; i < 16; i++) lines.push({ a: (hash2(i, seed) % 628) / 100, r: (hash2(i, 9) % 100) * 1.5 });
   const rnd = rng(seed ^ 0x55aa);
-  const cam = () => px * 0.5;
+  const cam = () => 0;   /* fixed camera: the world never slides, the runner snaps between lanes */
   const stew0Z = () => 24 + Math.max(0, t - 1.4) * 20;
   /* road curve + hills (cosmetic only: collision lanes are unaffected, everything bends relative to the camera) */
-  const XC = z => clamp((z - 120) / 220, 0, 1) * (22 * Math.sin(z / 130 + ph1) + 3 * Math.sin(z / 52 + ph2));
+  const XC = z => clamp((z - 120) / 220, 0, 1) * (7 * Math.sin(z / 160 + ph1) + 1 * Math.sin(z / 70 + ph2));
   let X0 = 0, D0 = 0;
   const Lof = zr => clamp(XC(pz + zr) - X0 - D0 * zr, -2.6, 2.6);
   const px3 = (lat, zr, s, cx) => 96 + (lat - cx + Lof(zr)) * RUN_LW * s;
   function setCam() {
     const amp = clamp((pz - 60) / 200, 0, 1);
-    rzH = Math.round(RUN_HZ + amp * (10 * Math.sin(pz / 120 + ph3) + 4 * Math.sin(pz / 55 + ph4)));
+    rzH = Math.round(RUN_HZ + amp * (3 * Math.sin(pz / 150 + ph3) + 1 * Math.sin(pz / 70 + ph4)));
     rzK = RUN_YP - rzH; rzC = RUN_CEIL - rzK; X0 = XC(pz); D0 = XC(pz + 0.5) - XC(pz - 0.5);
   }
 
@@ -488,7 +488,7 @@ function makeRunner(seed, skin) {
   let drag = null; const THR = 8;
   me.onDown = (id, x, y) => { if (!drag) drag = { id: id, x: x, y: y, x0: x, y0: y, t0: performance.now(), fired: false }; };
   me.onMove = (id, x, y) => {
-    if (!drag || drag.id !== id) return;
+    if (!drag || drag.id !== id || drag.fired) return;   /* one swipe = one action */
     const dx = x - drag.x, dy = y - drag.y;
     if (Math.abs(dx) < THR && Math.abs(dy) < THR) return;
     if (Math.abs(dx) > Math.abs(dy)) me.act(dx < 0 ? 'left' : 'right'); else me.act(dy < 0 ? 'jump' : 'slide');
@@ -529,13 +529,13 @@ function makeRunner(seed, skin) {
     pz += v * dt;
     /* lateral: crisp one-lane snap, ~0.09s, buffered */
     if (mt < 1) {
-      mt = Math.min(1, mt + dt / 0.09); const e = mt * mt * (3 - 2 * mt); px = fromL + (tl - fromL) * e;
+      mt = Math.min(1, mt + dt / 0.075); const e = 1 - Math.pow(1 - mt, 3); px = fromL + (tl - fromL) * e;
       if (mt >= 1) { px = tl; if (laneQ.length) startMove(laneQ.shift()); }
     } else px = tl;
     cl = mt >= 0.5 ? tl : fromL;
     /* vertical */
     if (yj > 0 || vy > 0) {
-      vy -= (8 * RUN_JH / (RUN_JT * RUN_JT)) * dt * (qSlide ? 1.6 : 1); yj += vy * dt;
+      vy -= (8 * RUN_JH / (RUN_JT * RUN_JT)) * dt * (qSlide ? 1.6 : vy < 0 ? 1.25 : 1); yj += vy * dt;
       if (yj <= 0) { yj = 0; vy = 0; dustBurst(5); SFX.noise(0.05, 0.07, 700, 200);
         if (qSlide) { qSlide = false; slideT = 0.5; slideAge = 0; SFX.swish(); } }
     }
@@ -599,7 +599,7 @@ function makeRunner(seed, skin) {
         const f = 1000 + Math.min(chain, 14) * 85; SFX.tone(f, 0.07, 'square', 0.06); SFX.tone(f * 1.5, 0.12, 'triangle', 0.05, 0, 0.03);
         const sx = 96 + (c.lane - cam()) * RUN_LW, sy = RUN_YP - c.h - 6;
         for (let q = 0; q < 5; q++) part(sx, sy, (rnd() - 0.5) * 120, -rnd() * 90 - 20, 0.4, [YEL, WHT, ORG][q % 3], 1, 260);
-        if (chain === 5 || chain === 10 || chain === 15 || chain === 20) pop('CHAIN x' + chain, 96, 140, LIME, 1);
+        if (chain === 10 || chain === 20) pop('CHAIN x' + chain, 96, 96, LIME, 1);
       }
     }
     /* power-ups */
@@ -951,14 +951,13 @@ function makeRunner(seed, skin) {
     T(g, String(Math.floor(me.score)), 4, 25, WHT, { s: 2, sh: BLK });
     T(g, Math.floor(pz) + 'M', 4, 42, LGR, { sh: BLK });
     blit(g, runSprites(0).coin[0], 62, 50, 1, 1); T(g, 'x' + quarters, 70, 42, YEL, { sh: BLK });
-    T(g, 'BEST ' + Math.max(RUN_BEST, Math.floor(me.score)), 188, 3 + 0, LGR, { al: 'r' });
+    T(g, 'BEST ' + Math.max(RUN_BEST, Math.floor(me.score)), 174, 3, LGR, { al: 'r' });
     /* threat meter: the foreman */
     const th = near > 0.1;
     g.globalAlpha = 1; R(g, 150, 22, 38, 14, BLK); R(g, 151, 23, 36, 12, th ? ((Math.floor(t * 6) & 1) ? '#7a0a1a' : '#3a0610') : '#1d2b53');
     E(g, 160, 32, 5, 4, BLK); E(g, 160, 31, 4, 3, th ? '#ff4d4d' : DGR); R(g, 155, 31, 11, 2, BLK); R(g, 156, 31, 9, 1, th ? '#ff9a9a' : LGR);
     R(g, 168, 26, 16, 6, BLK); R(g, 169, 27, 14, 4, DGR); R(g, 169, 27, Math.round(14 * clamp(near, 0, 1)), 4, near > 0.5 ? RED : ORG);
     if (shield) { D(g, 172, 31, 3, '#29adff'); }
-    if (chain >= 2) T(g, 'CHAIN ' + chain, 84, 28, LIME, { sh: BLK });
     /* active power-ups */
     let px0 = 4; const sp = runSprites(0).pup;
     const chip = (img, frac) => { blit(g, img, px0 + 9, 76, 0.7, 1); R(g, px0, 78, 14, 3, BLK); R(g, px0 + 1, 79, Math.round(12 * frac), 1, WHT); px0 += 18; };

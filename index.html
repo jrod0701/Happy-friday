@@ -1536,8 +1536,9 @@ function makeSummit(seed, skin) {
     const m = Math.floor(time / 60), s = Math.floor(time % 60);
     T(g, m + ':' + (s < 10 ? '0' : '') + s, 96, 12, time < 10 ? RED : LGR, { al: 'c' });
     T(g, String(Math.round(me.score)), VW - 19, 6, YEL, { al: 'r', sh: BLK });
-    if (best === 0 && !me.over && time > 74) { if (Math.floor(t * 2) & 1) T(g, 'JUMP INTO THE ICE ABOVE YOU', 96, VT + 8, WHT, { al: 'c', ol: BLK }); }
-    if (best === 0 && !me.over && time <= 74 && time > 66) T(g, 'BREAK A BLOCK, THEN CLIMB', 96, VT + 8, WHT, { al: 'c', ol: BLK });
+    const hint = str => { const w = tw(str) + 8; g.globalAlpha = 0.8; R(g, 96 - w / 2, VT + 4, w, 14, BLK); g.globalAlpha = 1; T(g, str, 96, VT + 8, WHT, { al: 'c' }); };
+    if (best === 0 && !me.over && time > 74) hint('BONK THE ICE ABOVE YOU');
+    if (best === 0 && !me.over && time <= 74 && time > 66) hint('BREAK A BLOCK, THEN CLIMB');
     if (me.over) {
       R(g, 0, 120, VW, 54, 'rgba(14,12,26,.78)');
       T(g, endMsg, 96, 130, summit ? YEL : endMsg === 'TIME UP' ? WHT : RED, { al: 'c', s: tw(endMsg, 2) <= 176 ? 2 : 1, ol: BLK });
@@ -3037,7 +3038,7 @@ function makeWheelman(seed, skin) {
     // HUD
     R(g, 0, 0, VW, 27, BLK); R(g, 0, 27, VW, 1, NAVY);
     T(g, '$' + me.score, 4, 2, YEL, { s: 2 });
-    const ts = Math.max(0, time); T(g, ts.toFixed(1), VW - 4, 2, ts < 10 ? (Math.floor(t * 4) & 1 ? RED : WHT) : WHT, { s: 2, al: 'r' });
+    const ts = Math.max(0, time); T(g, ts.toFixed(1), VW - 19, 2, ts < 10 ? (Math.floor(t * 4) & 1 ? RED : WHT) : WHT, { s: 2, al: 'r' });
     const mult = Math.min(3, 1 + 0.2 * chain);
     if (phase === 1) {
       const fr = clamp(fareT / lim, 0, 1), bc = fr > 0.5 ? LIME : fr > 0.22 ? YEL : (Math.floor(t * 6) & 1 ? RED : ORG);
@@ -3262,7 +3263,7 @@ function myCity(seed, TH, r) {
   for (let i = W.peds.length - 1; i >= 0; i--) if (drop[tiOf(W.peds[i])]) W.peds.splice(i, 1);
   for (let i = W.statics.length - 1; i >= 0; i--) { const p = W.statics[i]; if ((p.k === 'tree' && (drop[tiOf(p)] || Math.hypot(p.x - cx * 8, p.y - cy * 8) < 62)) || (p.k === 'fountain' && Math.hypot(p.x - cx * 8, p.y - cy * 8) > 1 && Math.hypot(p.x - cx * 8, p.y - cy * 8) < 85)) W.statics.splice(i, 1); }
   for (let y = R0; y < RE; y++) for (let x = R0; x < RE; x++) { const v = map.t[y * N + x]; if (v === 2 || (v === 0 && (x * 7 + y * 3) % 5 === 0)) W.walk.push([x * 8 + 4, y * 8 + 4]); }
-  for (let i = 0; i < 110; i++) { const w = W.walk[Math.floor(r() * W.walk.length)]; if (map.t[Math.floor(w[1] / 8) * N + Math.floor(w[0] / 8)] === 2) mkPed(w[0], w[1]); }
+  for (let i = 0; i < 45; i++) { const w = W.walk[Math.floor(r() * W.walk.length)]; if (map.t[Math.floor(w[1] / 8) * N + Math.floor(w[0] / 8)] === 2) mkPed(w[0], w[1]); }
   for (let i = 0; i < 14; i++) {
     const vert = r() < 0.5, k = Math.floor(r() * (MY_NB + 1)), s = Math.floor(r() * MY_NB), off = pick([-10, 10, 0]);
     const cx2 = vert ? myNode(k) + off : myNode(s) + 64, cy2 = vert ? myNode(s) + 64 : myNode(k) + off;
@@ -3930,14 +3931,14 @@ function makeMayhem(seed, skin) {
       for (let f = -7; f < 7; f++) { R(g, x + ca * f + px * 9, y + sa * f + py * 9, 1, 1, BLK); R(g, x + ca * f - px * 9, y + sa * f - py * 9, 1, 1, BLK); }
       for (const f of [-3, 0, 3]) { const bx = x + ca * f, by = y + sa * f; L(g, bx - ca * 1 + px * 3, by - sa * 1 + py * 3, bx + ca * 1, by + sa * 1, BLK, 1); L(g, bx - ca * 1 - px * 3, by - sa * 1 - py * 3, bx + ca * 1, by + sa * 1, BLK, 1); }
     }
-    for (const rp of ramps) { const x = rp.x + ox, y = rp.y + oy - 12 - Math.sin(t * 5) * 1.5; if (!onScr(x, y, 20)) continue; myStar(g, x, y, 5, (Math.floor(t * 4) & 1) ? YEL : ORG, BLK, t * 2, 0.5); T(g, 'JUMP', x, y - 12, WHT, { al: 'c', ol: BLK }); }
+    for (const rp of ramps) { const x = rp.x + ox, y = rp.y + oy - 12 - Math.sin(t * 5) * 1.5; if (!onScr(x, y, 20)) continue; myStar(g, x, y, 5, (Math.floor(t * 4) & 1) ? YEL : ORG, BLK, t * 2, 0.5); }
     // gold coin trails
     for (const q of gold) { const x = Math.round(q.x + ox), y = Math.round(q.y + oy - 3 - Math.sin(t * 6 + q.ph) * 1.5); if (!onScr(x, y, 8)) continue; R(g, x - 3, y - 3, 7, 7, BLK); R(g, x - 2, y - 3, 5, 7, YEL); R(g, x - 3, y - 2, 7, 5, YEL); const sh = Math.floor(t * 8 + q.ph * 3) % 6; R(g, x - 1, y - 2, 1, 4, sh < 2 ? WHT : ORG); if (sh === 0) P(g, x + 2, y - 3, WHT); }
     // spike strips
     for (const s of strips) { const x = s.x + ox, y = s.y + oy; if (!onScr(x, y, 20)) continue; const w = 24, h = 3; const bx = s.vert ? x - w / 2 : x - h / 2, by = s.vert ? y - h / 2 : y - w / 2, ww = s.vert ? w : h, hh = s.vert ? h : w; R(g, bx - 1, by - 1, ww + 2, hh + 2, BLK); R(g, bx, by, ww, hh, DGR); for (let i = 0; i < w; i += 3) { if (s.vert) { P(g, bx + i, by, WHT); P(g, bx + i + 1, by + 2, LGR); } else { P(g, bx, by + i, WHT); P(g, bx + 2, by + i + 1, LGR); } } if (!s.hit && (Math.floor(t * 4) & 1)) T(g, '!', x, y - 11, RED, { al: 'c', ol: BLK }); }
     // props
     for (const p of props) { if (!p.alive) continue; const x = Math.round(p.x + ox), y = Math.round(p.y + oy); if (!onScr(x, y, 10)) continue; if (p.k === 'cone') tdCone(g, x, y, 0, 0); else g.drawImage(myPropSpr(p.k), x - 8, y - 8); }
-    for (const p of props) { if (!p.alive || p.k !== 'bomb') continue; const x = Math.round(p.x + ox), y = Math.round(p.y + oy); if (!onScr(x, y, 14)) continue; if (Math.floor(t * 4 + x * 0.1) & 1) { R(g, x - 7, y - 7, 15, 1, YEL); R(g, x - 7, y + 7, 15, 1, YEL); R(g, x - 7, y - 7, 1, 15, YEL); R(g, x + 7, y - 7, 1, 15, YEL); } T(g, 'TNT', x, y - 15, (Math.floor(t * 4) & 1) ? RED : WHT, { al: 'c', ol: BLK }); }
+    for (const p of props) { if (!p.alive || p.k !== 'bomb') continue; const x = Math.round(p.x + ox), y = Math.round(p.y + oy); if (!onScr(x, y, 14)) continue; if (Math.floor(t * 4 + x * 0.1) & 1) { R(g, x - 7, y - 7, 15, 1, YEL); R(g, x - 7, y + 7, 15, 1, YEL); R(g, x - 7, y - 7, 1, 15, YEL); R(g, x + 7, y - 7, 1, 15, YEL); }  }
     for (const q of picks) {
       const x = Math.round(q.x + ox), bob = Math.sin(t * 4 + q.ph) * 2.5, y = Math.round(q.y + oy - 9 + bob); if (!onScr(x, y, 20)) continue;
       const P0 = PK[q.k], pulse = 0.55 + 0.45 * Math.sin(t * 7 + q.ph);
@@ -5049,16 +5050,16 @@ function makeRunner(seed, skin) {
   const parts = [], pops = [], lines = [];
   for (let i = 0; i < 16; i++) lines.push({ a: (hash2(i, seed) % 628) / 100, r: (hash2(i, 9) % 100) * 1.5 });
   const rnd = rng(seed ^ 0x55aa);
-  const cam = () => px * 0.5;
+  const cam = () => 0;   /* fixed camera: the world never slides, the runner snaps between lanes */
   const stew0Z = () => 24 + Math.max(0, t - 1.4) * 20;
   /* road curve + hills (cosmetic only: collision lanes are unaffected, everything bends relative to the camera) */
-  const XC = z => clamp((z - 120) / 220, 0, 1) * (22 * Math.sin(z / 130 + ph1) + 3 * Math.sin(z / 52 + ph2));
+  const XC = z => clamp((z - 120) / 220, 0, 1) * (7 * Math.sin(z / 160 + ph1) + 1 * Math.sin(z / 70 + ph2));
   let X0 = 0, D0 = 0;
   const Lof = zr => clamp(XC(pz + zr) - X0 - D0 * zr, -2.6, 2.6);
   const px3 = (lat, zr, s, cx) => 96 + (lat - cx + Lof(zr)) * RUN_LW * s;
   function setCam() {
     const amp = clamp((pz - 60) / 200, 0, 1);
-    rzH = Math.round(RUN_HZ + amp * (10 * Math.sin(pz / 120 + ph3) + 4 * Math.sin(pz / 55 + ph4)));
+    rzH = Math.round(RUN_HZ + amp * (3 * Math.sin(pz / 150 + ph3) + 1 * Math.sin(pz / 70 + ph4)));
     rzK = RUN_YP - rzH; rzC = RUN_CEIL - rzK; X0 = XC(pz); D0 = XC(pz + 0.5) - XC(pz - 0.5);
   }
 
@@ -5099,7 +5100,7 @@ function makeRunner(seed, skin) {
   let drag = null; const THR = 8;
   me.onDown = (id, x, y) => { if (!drag) drag = { id: id, x: x, y: y, x0: x, y0: y, t0: performance.now(), fired: false }; };
   me.onMove = (id, x, y) => {
-    if (!drag || drag.id !== id) return;
+    if (!drag || drag.id !== id || drag.fired) return;   /* one swipe = one action */
     const dx = x - drag.x, dy = y - drag.y;
     if (Math.abs(dx) < THR && Math.abs(dy) < THR) return;
     if (Math.abs(dx) > Math.abs(dy)) me.act(dx < 0 ? 'left' : 'right'); else me.act(dy < 0 ? 'jump' : 'slide');
@@ -5140,13 +5141,13 @@ function makeRunner(seed, skin) {
     pz += v * dt;
     /* lateral: crisp one-lane snap, ~0.09s, buffered */
     if (mt < 1) {
-      mt = Math.min(1, mt + dt / 0.09); const e = mt * mt * (3 - 2 * mt); px = fromL + (tl - fromL) * e;
+      mt = Math.min(1, mt + dt / 0.075); const e = 1 - Math.pow(1 - mt, 3); px = fromL + (tl - fromL) * e;
       if (mt >= 1) { px = tl; if (laneQ.length) startMove(laneQ.shift()); }
     } else px = tl;
     cl = mt >= 0.5 ? tl : fromL;
     /* vertical */
     if (yj > 0 || vy > 0) {
-      vy -= (8 * RUN_JH / (RUN_JT * RUN_JT)) * dt * (qSlide ? 1.6 : 1); yj += vy * dt;
+      vy -= (8 * RUN_JH / (RUN_JT * RUN_JT)) * dt * (qSlide ? 1.6 : vy < 0 ? 1.25 : 1); yj += vy * dt;
       if (yj <= 0) { yj = 0; vy = 0; dustBurst(5); SFX.noise(0.05, 0.07, 700, 200);
         if (qSlide) { qSlide = false; slideT = 0.5; slideAge = 0; SFX.swish(); } }
     }
@@ -5210,7 +5211,7 @@ function makeRunner(seed, skin) {
         const f = 1000 + Math.min(chain, 14) * 85; SFX.tone(f, 0.07, 'square', 0.06); SFX.tone(f * 1.5, 0.12, 'triangle', 0.05, 0, 0.03);
         const sx = 96 + (c.lane - cam()) * RUN_LW, sy = RUN_YP - c.h - 6;
         for (let q = 0; q < 5; q++) part(sx, sy, (rnd() - 0.5) * 120, -rnd() * 90 - 20, 0.4, [YEL, WHT, ORG][q % 3], 1, 260);
-        if (chain === 5 || chain === 10 || chain === 15 || chain === 20) pop('CHAIN x' + chain, 96, 140, LIME, 1);
+        if (chain === 10 || chain === 20) pop('CHAIN x' + chain, 96, 96, LIME, 1);
       }
     }
     /* power-ups */
@@ -5562,14 +5563,13 @@ function makeRunner(seed, skin) {
     T(g, String(Math.floor(me.score)), 4, 25, WHT, { s: 2, sh: BLK });
     T(g, Math.floor(pz) + 'M', 4, 42, LGR, { sh: BLK });
     blit(g, runSprites(0).coin[0], 62, 50, 1, 1); T(g, 'x' + quarters, 70, 42, YEL, { sh: BLK });
-    T(g, 'BEST ' + Math.max(RUN_BEST, Math.floor(me.score)), 188, 3 + 0, LGR, { al: 'r' });
+    T(g, 'BEST ' + Math.max(RUN_BEST, Math.floor(me.score)), 174, 3, LGR, { al: 'r' });
     /* threat meter: the foreman */
     const th = near > 0.1;
     g.globalAlpha = 1; R(g, 150, 22, 38, 14, BLK); R(g, 151, 23, 36, 12, th ? ((Math.floor(t * 6) & 1) ? '#7a0a1a' : '#3a0610') : '#1d2b53');
     E(g, 160, 32, 5, 4, BLK); E(g, 160, 31, 4, 3, th ? '#ff4d4d' : DGR); R(g, 155, 31, 11, 2, BLK); R(g, 156, 31, 9, 1, th ? '#ff9a9a' : LGR);
     R(g, 168, 26, 16, 6, BLK); R(g, 169, 27, 14, 4, DGR); R(g, 169, 27, Math.round(14 * clamp(near, 0, 1)), 4, near > 0.5 ? RED : ORG);
     if (shield) { D(g, 172, 31, 3, '#29adff'); }
-    if (chain >= 2) T(g, 'CHAIN ' + chain, 84, 28, LIME, { sh: BLK });
     /* active power-ups */
     let px0 = 4; const sp = runSprites(0).pup;
     const chip = (img, frac) => { blit(g, img, px0 + 9, 76, 0.7, 1); R(g, px0, 78, 14, 3, BLK); R(g, px0 + 1, 79, Math.round(12 * frac), 1, WHT); px0 += 18; };
@@ -5974,7 +5974,8 @@ function makeMailman(seed, skin) {
   const HZ = MAIL_HZ, CH = MAIL_CAMH, SB = MAIL_SB, LS = 1.5, HSC = MAIL_HS, GRAV = 250, DAY = G.day, WT = 1 + DAY * 0.06;
   const me = { score: 0, ended: false, over: false, settle: true };
   const houses = G.houses, SUBS = houses.filter(h => h.sub).length;
-  const haz = G.haz.map(h => Object.assign({ st: 0, t: 0, vx: 0, aim: 0, aimT: 0, bt: 0, x0: h.x, z0: h.z, car: Math.floor(rr() * 3), fan: 0, th: 0 }, h));
+  const MAIL_CUT = { hose: 1, ban: 1, man: 1, bigf: 1, tire: 1, sneak: 1 };   /* keep the neighbourhood grounded: no snakes, bigfoot or manholes */
+  const haz = G.haz.filter(h => !MAIL_CUT[h.k]).map(h => Object.assign({ st: 0, t: 0, vx: 0, aim: 0, aimT: 0, bt: 0, x0: h.x, z0: h.z, car: Math.floor(rr() * 3), fan: 0, th: 0 }, h));
   const crs = G.course, bags = G.bags.map(b => Object.assign({ got: 0 }, b));
   const flights = [], parts = [], pops = [], balloons = [], bubs = [];
   const amb = [], clouds = [], birds = [];
@@ -5988,12 +5989,12 @@ function makeMailman(seed, skin) {
   let t = 0, zp = 0, px = 0, ptx = 0, hold = 0, v = 0, bag = 16, lives = 3, combo = 0, maxCombo = 0, served = 0, smashed = 0, thrown = 0, wasted = 0, cancels = 0, delPts = 0, trainPts = 0, missedSubs = 0;
   let inv = 0, stum = 0, stumDir = 1, soak = 0, shake = 0, thA = 0, thSide = 1, ph = 0, endT = 0, endMsg = '', fin = false, finT = 0, comboFlash = 0, bonus = 0, bagFlash = 0, hitsTaken = 0, routeDone = false, perfectRoute = false, courseCrash = false, courseClear = false, puffT = 0, fan = 0, trainHits = 0;
   let drag = null, camX = 0, zcam = 0, rainOn = 0;
-  const mcv = z => { const c = G.curve; return Math.min(1, z / 500) * (c[0] * Math.sin(z / 260 + c[1]) + c[2] * Math.sin(z / 97 + c[3])); };
+  const mcv = z => 0;   /* straight street, like the original: readable and steady */
   function pj(lat, z) { const d = z - zcam; if (d < 0.5) return null; const s = 40 / (40 + d); return { x: VW / 2 + (mcv(z) + lat - camX) * s * LS, y: HZ + CH * s, s: s, d: d }; }
   function pop(x, y, s, c, sc) { if (pops.length > 9) pops.shift(); pops.push({ x: x, y: y, s: s, c: c, t: 0, sc: sc || 1 }); }
   function part(x, y, vx, vy, life, c, g2) { if (parts.length > 100) return; parts.push({ x: x, y: y, vx: vx, vy: vy, life: life, l0: life, c: c, g: g2 == null ? 220 : g2 }); }
   const pick = a => a[Math.floor(Math.random() * a.length)];
-  for (let i = 0; i < (TH.snow ? 46 : TH.leaf ? 26 : TH.rain ? 50 : 0); i++) amb.push({ x: rr() * VW, y: rr() * SB, vx: (rr() - 0.5) * 12, vy: TH.rain ? 150 + rr() * 60 : 14 + rr() * 22, ph: rr() * 6, c: TH.leaf ? [ORG, RED, YEL][i % 3] : WHT });
+  for (let i = 0; i < (TH.snow ? 30 : TH.leaf ? 9 : TH.rain ? 40 : 0); i++) amb.push({ x: rr() * VW, y: rr() * SB, vx: (rr() - 0.5) * 12, vy: TH.rain ? 150 + rr() * 60 : 14 + rr() * 22, ph: rr() * 6, c: TH.leaf ? [ORG, RED, YEL][i % 3] : WHT });
   for (let i = 0; i < 5; i++) clouds.push({ x: rr() * 260 - 30, y: 28 + rr() * 38, sp: 2 + rr() * 3, sz: 0.8 + rr() * 0.8 });
   for (let i = 0; i < 4; i++) birds.push({ k: i, ph: rr() * 6 });
   const houseOf = h => SPR.house[h.kind + '_' + h.pal][h.sub && !h.cancel ? 1 : 0];
@@ -6198,14 +6199,6 @@ function makeMailman(seed, skin) {
       R(g, cl - 1, y, 1, 1, TH.curb); R(g, cr, y, 1, 1, TH.curb);
       R(g, cl, y, cr - cl, 1, TH.road[far ? 0 : (Math.floor(zw / 22) & 1)]);
       if ((!far && (Math.floor(zw / 22) & 1) === 0) || (far && (Math.floor(zw / 40) & 1) === 0)) R(g, Math.round(cx - 1.3 * sL), y, Math.max(1, Math.round(2.6 * sL)), 1, TH.line);
-      if (!far) {
-        const hh = hash2(Math.floor(zw / 2.5), y >> 1);
-        if (TH.leaf && hh % 5 < 2) { const c = [ORG, RED, YEL, BRN][(hh >>> 12) & 3]; if (xl > 2) P(g, (hh >>> 4) % xl, y, c); if (VW - xr > 2) P(g, xr + (hh >>> 6) % (VW - xr), y, c); if ((hh >>> 9) % 4 === 0) P(g, cl + (hh >>> 5) % Math.max(1, cr - cl), y, c); }
-        else if (TH.snow && hh % 7 === 0) { if (xl > 2) P(g, (hh >>> 4) % xl, y, '#c2cde8'); if (VW - xr > 2) P(g, xr + (hh >>> 6) % (VW - xr), y, '#c2cde8'); }
-        else if (TH.rain && hh % 6 === 0) { const c = [PINK, WHT, YEL][(hh >>> 10) % 3]; if (xl > 2) P(g, (hh >>> 4) % xl, y, c); if (VW - xr > 2) P(g, xr + (hh >>> 6) % (VW - xr), y, c); }
-        else if (!TH.leaf && !TH.snow && hh % 9 === 0) { if (xl > 2) P(g, (hh >>> 4) % xl, y, TH.lawn[1 - band]); if (VW - xr > 2) P(g, xr + (hh >>> 6) % (VW - xr), y, TH.lawn[1 - band]); }
-        if (TH.snow && (hh >>> 3) % 6 === 0) P(g, cl + (hh >>> 5) % Math.max(1, cr - cl), y, '#9aa3bc');
-      }
     }
   }
   function shadow(g, x, y, w, a) { g.globalAlpha = a == null ? 0.3 : a; E(g, x, y, Math.max(1, Math.round(w)), Math.max(1, Math.round(w / 4)), BLK); g.globalAlpha = 1; }
@@ -6223,9 +6216,9 @@ function makeMailman(seed, skin) {
   function items(g) {
     const dr = [], nt = nextTargets(), HS = SPR.hz, DC = SPR.dc;
     bubs.length = 0;
-    const add = (z, f, off) => { const d = z - zcam; if (d < 0.6 || d > 440) return; dr.push({ d: d + (off || 0), f: f }); };
+    const add = (z, f, off) => { const d = z - zcam; if (d < 0.6 || d > 300) return; dr.push({ d: d + (off || 0), f: f }); };
     for (const h of houses) {
-      const d0 = h.z - zcam; if (d0 < 0.6 || d0 > 440) continue;
+      const d0 = h.z - zcam; if (d0 < 0.6 || d0 > 300) continue;
       const m = houseOf(h), dl = doorLat(h);
       dr.push({ d: d0 + 40, f: g2 => { quad(g2, h.side * 49, dl + (h.side > 0 ? 3 : -3), h.z - 9, h.z, TH.snow ? '#e0e6f4' : '#cfc6b4'); quad(g2, dl - 9, dl + 9, h.z - 12, h.z - 9, TH.snow ? '#dde3f2' : '#b8ae9c'); } });
       dr.push({ d: d0 + 1, f: g2 => {
@@ -6256,7 +6249,7 @@ function makeMailman(seed, skin) {
       } });
     }
     for (const q of G.deco) {
-      const d0 = q.z - zcam; if (d0 < 0.6 || d0 > 440) continue;
+      const d0 = q.z - zcam; if (d0 < 0.6 || d0 > 300) continue;
       if (q.k === 'drive' || q.k === 'drivecar' || q.k === 'wash') dr.push({ d: d0 + 45, f: g2 => { quad(g2, q.side * 49, q.side * 118, q.z - 15, q.z + 15, TH.snow ? '#d4dae8' : '#9a9aa6'); } });
       dr.push({ d: d0, f: g2 => {
         const p = pj(q.x, q.z); if (!p) return; const sl = p.s * LS, x = p.x, y = p.y;
@@ -6279,14 +6272,9 @@ function makeMailman(seed, skin) {
     }
     for (const q of G.puddles) { const d0 = q.z - zcam; if (d0 < 0.6 || d0 > 300) continue; dr.push({ d: d0 + 30, f: g2 => { const p = pj(q.x, q.z); if (p) mailBlit(g2, DC.puddle, p.x, p.y + 3 * p.s, p.s * LS * 1.1); } }); }
     for (const q of G.lamps) add(q.z, g2 => { const p = pj(q.x, q.z); if (p) mailBlit(g2, SPR.lamp, p.x, p.y, p.s * LS * 1.1); }, -0.2);
-    for (const q of G.bunt) add(q.z, g2 => {
-      const a = pj(-54, q.z), b = pj(54, q.z); if (!a || !b || a.s < 0.1) return; const cols = [RED, YEL, SKY, LIME, PINK, ORG];
-      let lx = a.x, ly = a.y - 64 * a.s * LS;
-      for (let i = 1; i <= 12; i++) { const u = i / 12, x = a.x + (b.x - a.x) * u, y = a.y + (b.y - a.y) * u - 64 * a.s * LS + Math.sin(u * 3.14) * 9 * a.s * LS; L(g2, lx, ly, x, y, BLK, 1); const w = Math.max(2, Math.round(5 * a.s * LS)); PG(g2, [[x - w / 2, y], [x + w / 2, y], [x, y + w * 1.3]], cols[i % 6]); lx = x; ly = y; }
-    }, -0.3);
     for (const b of bags) if (!b.got) add(b.z, g2 => { const p = pj(b.x, b.z); if (!p) return; shadow(g2, p.x, p.y, 8 * p.s * LS * 1.1); const bob = Math.sin(t * 5) * 2 * p.s; mailBlit(g2, HS.bag, p.x, p.y + bob - 3 * p.s, p.s * LS * 1.1); if (p.s > 0.3 && (Math.floor(t * 4) & 1)) { P(g2, p.x + 9 * p.s, p.y - 24 * p.s, WHT); P(g2, p.x - 9 * p.s, p.y - 18 * p.s, YEL); } });
     add(34, g2 => { const p = pj(100, 34); if (!p) return; quad(g2, 48, 150, 14, 52, TH.snow ? '#d4dae8' : '#9a9aa6'); mailBlit(g2, DC.truck, p.x, p.y, p.s * LS * 0.95); }, 0);
-    for (const h of haz) { if (h.st === 3 || h.z - zcam < 0.6 || h.z - zcam > 400) continue; dr.push({ d: h.z - zcam, f: g2 => drawHaz(g2, h) }); }
+    for (const h of haz) { if (h.st === 3 || h.z - zcam < 0.6 || h.z - zcam > 260) continue; dr.push({ d: h.z - zcam, f: g2 => drawHaz(g2, h) }); }
     for (const c of crs) {
       const d0 = c.z - zcam; if (d0 < 0.6 || d0 > 400) continue;
       dr.push({ d: d0, f: g2 => { const p = pj(c.x, c.z); if (!p) return; const sl = p.s * LS; if (c.k === 'target') { const wob = c.hit ? Math.sin(c.t * 22) * Math.max(0, 1 - c.t * 2) * 2 : 0; mailBlit(g2, DC.target[c.hit ? 1 : 0], p.x + wob, p.y, sl * 1.1); } else if (c.k === 'wall') { shadow(g2, p.x, p.y, 16 * sl); mailBlit(g2, DC.wall, p.x, p.y, sl); } else if (c.k === 'hay') { shadow(g2, p.x, p.y, 13 * sl); mailBlit(g2, DC.hay, p.x, p.y, sl); } else mailBlit(g2, DC.ditch, p.x, p.y + 2 * p.s, sl * 0.95); } });
@@ -6358,7 +6346,7 @@ function makeMailman(seed, skin) {
   }
   me.draw = g => {
     g.imageSmoothingEnabled = false;
-    zcam = zp - MAIL_CAMD; camX = mcv(zcam) + px * 0.5;
+    zcam = zp - MAIL_CAMD; camX = 0;
     R(g, 0, 0, VW, VH, BLK);
     g.save(); g.beginPath(); g.rect(0, 22, VW, SB - 22); g.clip();
     if (shake > 0) g.translate(Math.round((Math.random() - 0.5) * shake), Math.round((Math.random() - 0.5) * shake));
@@ -6368,7 +6356,7 @@ function makeMailman(seed, skin) {
     ground(g); items(g); fogOverlay(g);
     if (TH.rain && rainOn) { g.fillStyle = 'rgba(90,110,140,0.14)'; g.fillRect(0, 22, VW, SB - 22); for (const a of amb) L(g, a.x, a.y, a.x - 2, a.y + 6, '#c4d8ee', 1); }
     else if (TH.snow) for (const a of amb) R(g, a.x, a.y, 2, 2, WHT);
-    else for (const a of amb) R(g, a.x, a.y, 2, 1, a.c);
+    else for (const a of amb) { R(g, a.x - 1, a.y, 4, 2, a.c); P(g, a.x + (Math.sin(t * 3 + a.ph) > 0 ? 2 : -1), a.y - 1, a.c); }
     for (const q of parts) { g.globalAlpha = Math.min(1, q.life / q.l0 * 1.5); R(g, q.x, q.y, 2, 2, q.c); } g.globalAlpha = 1;
     for (const b of bubs) bubble(g, b.x, b.y, b.txt, b.type);
     for (const q of pops) { const sc = q.sc, w = tw(q.s, sc); T(g, q.s, clamp(q.x, 4 + w / 2, VW - 4 - w / 2), q.y - q.t * 18, q.c, { al: 'c', ol: BLK, s: sc }); }

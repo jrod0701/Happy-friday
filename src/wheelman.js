@@ -437,7 +437,7 @@ function makeWheelman(seed, skin) {
     // HUD
     R(g, 0, 0, VW, 27, BLK); R(g, 0, 27, VW, 1, NAVY);
     T(g, '$' + me.score, 4, 2, YEL, { s: 2 });
-    const ts = Math.max(0, time); T(g, ts.toFixed(1), VW - 4, 2, ts < 10 ? (Math.floor(t * 4) & 1 ? RED : WHT) : WHT, { s: 2, al: 'r' });
+    const ts = Math.max(0, time); T(g, ts.toFixed(1), VW - 19, 2, ts < 10 ? (Math.floor(t * 4) & 1 ? RED : WHT) : WHT, { s: 2, al: 'r' });
     const mult = Math.min(3, 1 + 0.2 * chain);
     if (phase === 1) {
       const fr = clamp(fareT / lim, 0, 1), bc = fr > 0.5 ? LIME : fr > 0.22 ? YEL : (Math.floor(t * 6) & 1 ? RED : ORG);
