@@ -220,6 +220,29 @@ function runHaz(g, x, y, w, h, c1, c2, per) {
   per = per || 8;
   for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) { fc(g, ((i + j) % per) < per / 2 ? c1 : c2); g.fillRect(x + i, y + j, 1, 1); }
 }
+/* scaled sprite cache: log-quantised scale, crisp alpha, optional fog tint (built once per size) */
+const RUN_LQ = 22;
+function runMip(img, s, fq, fogC) {
+  const li = Math.round(Math.log(s) * RUN_LQ), sq = Math.exp(li / RUN_LQ);
+  const m = img.__m || (img.__m = new Map()), key = fq ? li * 16 + fq + fogC : li * 16;
+  let c = m.get(key); if (c) return c;
+  const w = Math.max(1, Math.round(img.width * sq)), h = Math.max(1, Math.round(img.height * sq));
+  c = document.createElement('canvas'); c.width = w; c.height = h; const g = c.getContext('2d');
+  g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high'; g.drawImage(img, 0, 0, w, h);
+  try { const d = g.getImageData(0, 0, w, h), a = d.data; for (let i = 3; i < a.length; i += 4) a[i] = a[i] < 100 ? 0 : 255; g.putImageData(d, 0, 0); } catch (e) { }
+  if (fq) { g.globalCompositeOperation = 'source-atop'; g.globalAlpha = fq / 10; fc(g, fogC); g.fillRect(0, 0, w, h); g.globalAlpha = 1; g.globalCompositeOperation = 'source-over'; }
+  m.set(key, c); return c;
+}
+/* background props: pull toward the wall tone and soften the black outline so gameplay objects pop */
+function runMute(cv, tint, k) {
+  const g = cv.getContext('2d'), d = g.getImageData(0, 0, cv.width, cv.height), a = d.data, T0 = runHex(runH(tint));
+  for (let i = 0; i < a.length; i += 4) {
+    if (!a[i + 3]) continue;
+    const lum = a[i] + a[i + 1] + a[i + 2], kk = lum < 60 ? Math.min(1, k * 1.7) : k;
+    for (let j = 0; j < 3; j++) a[i + j] = Math.round(a[i + j] + (T0[j] - a[i + j]) * kk);
+  }
+  g.putImageData(d, 0, 0); return cv;
+}
 function runBox(g, x, y, w, h, c, o) { R(g, x, y, w, h, o == null ? BLK : o); R(g, x + 1, y + 1, w - 2, h - 2, c); }
 const RUN_SPR = {};
 function runSprites(th) {
@@ -384,6 +407,11 @@ function runSprites(th) {
     R(g, 0, 0, 150, 30, BLK); R(g, 2, 2, 146, 26, TH.pil); R(g, 2, 2, 146, 3, TH.kA); R(g, 2, 25, 146, 3, TH.kA);
     T(g, TH.n, 75, 11, WHT, { al: 'c', sh: BLK });
   });
+  try {
+    const mt = TH.out ? TH.wB : runMix(TH.wA, TH.fog, 0.3), mk = TH.out ? 0.3 : 0.26;
+    S.jig.forEach(c => runMute(c, mt, mk)); [S.rack, S.stack, S.cartP, S.reelP, S.welder].forEach(c => runMute(c, mt, mk));
+    S.hang.forEach(c => runMute(c, runMix(TH.ceil, TH.fog, 0.4), 0.22));
+  } catch (e) { }
   RUN_SPR[th] = S; return S;
 }
 
@@ -700,7 +728,7 @@ function makeRunner(seed, skin) {
         if (TZ.out) {
           seg(0, 14, TZ.wL); seg(14, 46, TZ.wB);
           if (u < 0.5) seg(0, 52, TZ.pil);
-          else { const yy1 = Math.round(fy - 46 * s), yy2 = Math.round(fy - 14 * s); fc(g, runFc(TZ.win, s, 1, TZ)); for (let y = yy1; y < yy2; y++) if (((x + y) & 3) === 0 || ((x - y) & 3) === 0) g.fillRect(x, y, 1, 1); }
+          else { seg(14, 46, runMix(TZ.wB, TZ.win, 0.22)); seg(29, 31, runMix(TZ.wB, TZ.win, 0.5)); if (u > 4 && u < 4.25) seg(14, 46, TZ.pil); }
           seg(46, 49, TZ.pil);
           if (u > 1 && u < 2) seg(14, 18, ((Math.floor(wz * 2)) & 1) ? TZ.kA : TZ.kB);
           continue;
@@ -765,12 +793,17 @@ function makeRunner(seed, skin) {
     }
   }
   /* ---------- sprite blit: img bottom-centre at (x, fy), scaled ---------- */
-  function blit(g, img, x, fy, s, alpha) {
-    const w = img.width * s, h = img.height * s; if (w < 1 || h < 1) return;
+  function blit(g, img, x, fy, s, alpha, fk) {
+    if (img.width * s < 1 || img.height * s < 1) return;
     const a = alpha == null ? 1 : alpha; if (a <= 0.02) return;
-    g.globalAlpha = a; g.imageSmoothingEnabled = s < 0.95;
-    g.drawImage(img, Math.round(x - w / 2), Math.round(fy - h), Math.max(1, Math.round(w)), Math.max(1, Math.round(h)));
-    g.globalAlpha = 1; g.imageSmoothingEnabled = false;
+    let src = img, w, h;
+    if (s < 0.97) {
+      const fq = fk ? Math.min(9, Math.round(runFogT(s) * fk * 10)) : 0;
+      src = runMip(img, s, fq, fq ? ZT(pz + RUN_DC / s - RUN_DC).fog : ''); w = src.width; h = src.height;
+    } else { w = Math.round(img.width * s); h = Math.round(img.height * s); }
+    g.globalAlpha = a; g.imageSmoothingEnabled = false;
+    g.drawImage(src, Math.round(x) - (w >> 1), Math.round(fy) - h, w, h);
+    g.globalAlpha = 1;
   }
   const fadeA = s => clamp((s - 0.068) / 0.06, 0, 1);
 
@@ -782,7 +815,7 @@ function makeRunner(seed, skin) {
       if (o.k === 'P') {
         if (o.z > pz - 1) {   /* warning sign a few metres before the pit, steam above it */
           const sz = o.z - 0.45 * (o.v || 12) - 3.5, side = o.lane < 0 ? -1 : o.lane > 0 ? 1 : -1;
-          if (sz > pz - 1) add(sz, g => { const zr = sz - pz, s = runS(zr), fy = runFy(s); blit(g, sprAt(sz).sign, px3(side * 1.78, zr, s, cx), fy, s, fadeA(s)); });
+          if (sz > pz - 1) add(sz, g => { const zr = sz - pz, s = runS(zr), fy = runFy(s); blit(g, sprAt(sz).sign, px3(side * 1.78, zr, s, cx), fy, s, fadeA(s), 0.7); });
           add(o.z + 1.6, g => { const zr = o.z + 1.6 - pz, s = runS(Math.max(zr, -0.9)), fy = runFy(s), x = px3(o.lane, Math.max(zr, -0.9), s, cx), fa = fadeA(s);
             for (let q = 0; q < 3; q++) { const ph = (t * 0.9 + q / 3) % 1; g.globalAlpha = 0.4 * (1 - ph) * fa; D(g, x + Math.sin(ph * 6 + q * 2) * 6 * s, fy - (8 + ph * 34) * s, Math.max(1, Math.round((3 + ph * 4) * s)), '#ffd9b0'); }
             g.globalAlpha = 1; });
@@ -801,7 +834,7 @@ function makeRunner(seed, skin) {
       const u = pups[i]; if (u.z > pz + RUN_ZV) break; if (u.got || u.z < pz - 1.0) continue;
       add(u.z, g => { const zr = u.z - pz, s = runS(zr), fy = runFy(s), x = px3(u.lane, zr, s, cx), fa = fadeA(s), bob = Math.sin(t * 5 + u.z) * 3;
         shadow(g, x, fy, 9, s, 0.3 * fa); g.globalAlpha = (0.25 + 0.15 * Math.sin(t * 8)) * fa; D(g, x, fy - 20 * s, Math.max(2, Math.round(16 * s)), '#ffffff'); g.globalAlpha = 1;
-        blit(g, sprAt(u.z).pup[u.kind], x, fy - (10 + bob) * s, s * 1.25, fa); });
+        blit(g, sprAt(u.z).pup[u.kind], x, fy - (10 + bob) * s, s * 1.25, fa, 0.4); });
     }
     const k0 = Math.floor((pz - 2) / RUN_BAY), k1 = Math.floor((pz + RUN_ZV) / RUN_BAY);
     for (let k = k0; k <= k1; k++) for (let sd = 0; sd < 2; sd++) {
@@ -811,9 +844,9 @@ function makeRunner(seed, skin) {
     for (let m = Math.floor((pz - 2) / 38); m <= Math.floor((pz + RUN_ZV) / 38); m++) {
       const z = m * 38 + 14 + (hash2(seed, m) % 8); if (z < pz - 1.0 || z > pz + RUN_ZV) continue;
       const TZ = ZT(z), SP = sprAt(z), h = hash2(seed + 5, m);
-      if (TZ.out) { if (h % 3 === 0) add(z, g => { const zr = z - pz, s = runS(zr), fy = runFy(s); blit(g, SP.hang[0], px3(((h >>> 3) % 2 ? 1 : -1) * 2.6, zr, s, cx), fy - 72 * s, s * 0.7, fadeA(s)); }); continue; }
-      if (h % 5 === 4) add(z, g => { const zr = z - pz, s = runS(zr), fy = runFy(s); blit(g, SP.banner[(h >>> 4) & 1], px3(0, zr, s, cx), fy - 188 * s, s, fadeA(s) * 0.95); });
-      else add(z, g => { const zr = z - pz, s = runS(zr), fy = runFy(s), lat = (((h >>> 3) % 3) - 1) * 0.35; blit(g, SP.hang[(h >>> 6) & 1], px3(lat, zr, s, cx), fy - 192 * s, s, fadeA(s)); });
+      if (TZ.out) { if (h % 3 === 0) add(z, g => { const zr = z - pz, s = runS(zr), fy = runFy(s); blit(g, SP.hang[0], px3(((h >>> 3) % 2 ? 1 : -1) * 2.6, zr, s, cx), fy - 72 * s, s * 0.7, fadeA(s), 1); }); continue; }
+      if (h % 5 === 4) add(z, g => { const zr = z - pz, s = runS(zr), fy = runFy(s); blit(g, SP.banner[(h >>> 4) & 1], px3(0, zr, s, cx), fy - 188 * s, s, fadeA(s), 0.8); });
+      else add(z, g => { const zr = z - pz, s = runS(zr), fy = runFy(s), lat = (((h >>> 3) % 3) - 1) * 0.35; blit(g, SP.hang[(h >>> 6) & 1], px3(lat, zr, s, cx), fy - 192 * s, s, fadeA(s), 1); });
     }
     if (ZT(pz + 20).out || ZT(pz + RUN_ZV).out) add(pz + RUN_ZV - 0.01, g => { const x = ((t * 7 + 40) % 300) - 60, y = 62 + Math.sin(t * 0.7) * 6; if (!ZT(pz + RUN_ZV * 0.5).out) return; blit(g, runSprites(3).hang[0], x, y, 0.36, 0.9); const ph = Math.floor(t * 24) & 1; R(g, x - 24, y - 12 - ph, 48, 1, '#2a2040'); });
     /* zone gates every 450 m */
@@ -823,11 +856,11 @@ function makeRunner(seed, skin) {
         g.globalAlpha = fa; const top = fy - 215 * s;
         R(g, xc - hw - 4 * s, top, 8 * s + 1, fy - top, BLK); R(g, xc + hw - 4 * s, top, 8 * s + 1, fy - top, BLK);
         R(g, xc - hw - 3 * s, top, Math.max(1, 6 * s), fy - top, TZ.kA); R(g, xc + hw - 3 * s, top, Math.max(1, 6 * s), fy - top, TZ.kA); g.globalAlpha = 1;
-        blit(g, sprAt(z + 1).zone, xc, fy - 185 * s, s, fa); });
+        blit(g, sprAt(z + 1).zone, xc, fy - 185 * s, s, fa, 0.6); });
     }
     for (const sw of stews) {
       if (sw.z < pz - 1.0 || sw.z > pz + RUN_ZV) continue;
-      add(sw.z, g => { const zr = sw.z - pz, s = runS(zr), fy = runFy(s), near2 = zr < 22, f = near2 ? (Math.floor(t * 5) & 1) : 0; blit(g, sprAt(sw.z).stewW[f], px3(sw.side * 2.05, zr, s, cx), fy, s, fadeA(s)); });
+      add(sw.z, g => { const zr = sw.z - pz, s = runS(zr), fy = runFy(s), near2 = zr < 22, f = near2 ? (Math.floor(t * 5) & 1) : 0; blit(g, sprAt(sw.z).stewW[f], px3(sw.side * 2.05, zr, s, cx), fy, s, fadeA(s), 0.6); });
     }
     if (t < 5) {   /* opening cameo: steward waves, then sprints ahead dropping the first coin trail */
       const zr = stew0Z() - pz;
@@ -839,12 +872,12 @@ function makeRunner(seed, skin) {
   function shadow(g, x, fy, w, s, a) { g.globalAlpha = a; E(g, x, fy, Math.max(1, w * s), Math.max(1, 3 * s), BLK); g.globalAlpha = 1; }
   function drawObs(g, o, cx) {
     const zr = o.z - pz, s = runS(zr), fy = runFy(s), x = px3(o.lane, zr, s, cx), fa = fadeA(s), SPR = sprAt(o.z);
-    if (o.k === 'C') { shadow(g, x, fy, 20, s, 0.34 * fa); blit(g, SPR.crate, x, fy, s, fa); }
-    else if (o.k === 'B') { shadow(g, x, fy, 22, s, 0.34 * fa); blit(g, SPR.barrier, x, fy, s, fa); }
-    else if (o.k === 'R') { shadow(g, x, fy, 18, s, 0.34 * fa); blit(g, SPR.reel[Math.floor(t * 8) & 1], x, fy, s, fa); }
+    if (o.k === 'C') { shadow(g, x, fy, 20, s, 0.34 * fa); blit(g, SPR.crate, x, fy, s, fa, 0.55); }
+    else if (o.k === 'B') { shadow(g, x, fy, 22, s, 0.34 * fa); blit(g, SPR.barrier, x, fy, s, fa, 0.55); }
+    else if (o.k === 'R') { shadow(g, x, fy, 18, s, 0.34 * fa); blit(g, SPR.reel[Math.floor(t * 8) & 1], x, fy, s, fa, 0.55); }
     else if (o.k === 'F') {
-      if (o.pair) { const x2 = px3(o.lane + 0.5, zr, s, cx); shadow(g, x2, fy, 46, s, 0.34 * fa); blit(g, SPR.dolly, x2, fy, s, fa); }
-      else { shadow(g, x, fy, 22, s, 0.34 * fa); blit(g, o.var === 1 ? SPR.cart : SPR.fork, x, fy, s, fa); if (o.var !== 1 && (Math.floor(t * 4) & 1)) R(g, x - 2 * s, fy - 53 * s, Math.max(1, 4 * s), Math.max(1, 3 * s), '#ff9a9a'); }
+      if (o.pair) { const x2 = px3(o.lane + 0.5, zr, s, cx); shadow(g, x2, fy, 46, s, 0.34 * fa); blit(g, SPR.dolly, x2, fy, s, fa, 0.55); }
+      else { shadow(g, x, fy, 22, s, 0.34 * fa); blit(g, o.var === 1 ? SPR.cart : SPR.fork, x, fy, s, fa, 0.55); if (o.var !== 1 && (Math.floor(t * 4) & 1)) R(g, x - 2 * s, fy - 53 * s, Math.max(1, 4 * s), Math.max(1, 3 * s), '#ff9a9a'); }
     }
     else if (o.k === 'H') {
       const by = fy - 30 * s, img = o.var === 1 ? SPR.pipe : SPR.blade;
@@ -852,7 +885,7 @@ function makeRunner(seed, skin) {
       g.globalAlpha = fa; fc(g, runFc(DGR, s, 1, ZT(o.z)));
       for (const dx of [-17, 17]) g.fillRect(Math.round(x + dx * s - w / 2), Math.round(ceil), w, Math.max(1, Math.round(by - 14 * s - ceil)));
       g.globalAlpha = 1;
-      blit(g, img, x, by, s, fa);
+      blit(g, img, x, by, s, fa, 0.55);
       shadow(g, x, fy, 20, s, 0.26 * fa);
     }
     else if (o.k === 'W') {
@@ -872,7 +905,7 @@ function makeRunner(seed, skin) {
     const zr = c.z - pz, s = runS(zr), fy = runFy(s), x = px3(c.lane, zr, s, cx), fa = fadeA(s), SPR = sprAt(c.z);
     const f = (Math.floor(t * 9) + i) & 3, y = fy - (c.h + 6) * s;
     if (c.h > 12) shadow(g, x, fy, 5, s, 0.22 * fa);
-    blit(g, SPR.coin[f], x, y + 5.5 * s, s * 1.15, fa);
+    blit(g, SPR.coin[f], x, y + 5.5 * s, s * 1.15, fa, 0.4);
     if (((Math.floor(t * 6) + i * 3) % 12) === 0) blit(g, SPR.glint, x, y + 5.5 * s, s * 0.9, fa);
   }
   function drawProp(g, h, sd, z, cx) {
@@ -884,7 +917,7 @@ function makeRunner(seed, skin) {
     else if (kind === 7) img = SPR.reelP; else if (kind === 8) img = SPR.welder; else img = SPR.stack;
     const x = px3(lat + sg * off, zr, s, cx);
     shadow(g, x, fy, img.width * 0.4, s, 0.28 * fa);
-    blit(g, img, x, fy, s, fa);
+    blit(g, img, x, fy, s, fa, 1);
     if (kind === 8 && s > 0.12) {   /* welder sparks */
       const k = Math.floor(t * 20 + h) % 3;
       if (k < 2) { const sx = x + sg * -9 * s, sy = fy - 24 * s; for (let q = 0; q < 4; q++) P(g, sx + (hash2(h, q + k * 7) % 9 - 4) * s, sy + (hash2(q, h + k) % 9 - 4) * s, q & 1 ? '#ffffff' : '#ffd02a'); D(g, sx, sy, Math.max(1, Math.round(1.5 * s)), '#ffffff'); }
@@ -914,17 +947,31 @@ function makeRunner(seed, skin) {
     if (mt < 1 && !air) lean += (tl - fromL) * 2;
     const bob = air ? 0 : Math.abs(sw) * -1.2;
     const X = x + Math.round(lean), Y = y0 + Math.round(bob);
+    const TR = '#2a3560', TRh = '#46548a', BOOT = '#4a3020', SKN = '#ffccaa', SKd = '#d9926a', TP = '#e8eef5', TPs = '#a9b4c4';
+    const hat = Li, hatS = runMix(runH(Li), runH(Dk), 0.45), Ms = runMix(runH(M), runH(Dk), 0.6);
     const leg = (lx, lift, side) => {
-      R(g, lx - 3, Y - 15, 6, 15 - lift, BLK); R(g, lx - 2, Y - 15, 4, 14 - lift, Dk);
-      R(g, lx - 3 + (air ? side : 0), Y - lift - 2, 7, 3, BLK); R(g, lx - 2 + (air ? side : 0), Y - lift - 2, 5, 1, LGR);
+      const so = air ? side : 0, len = 15 - lift;
+      R(g, lx - 3, Y - 15, 6, len, BLK); R(g, lx - 2, Y - 15, 4, len - 1, TR); R(g, lx - 2, Y - 15, 1, len - 1, TRh);
+      R(g, lx - 3 + so, Y - lift - 3, 7, 4, BLK); R(g, lx - 2 + so, Y - lift - 3, 5, 2, BOOT);
+      R(g, lx - 2 + so, Y - lift - 1, 5, 1, lift > 2 ? LGR : '#2a1a10');
     };
     leg(X - 4 + (air ? -2 : 0), l1, -1); leg(X + 4 + (air ? 2 : 0), l2, 1);
-    const arm = (ax, off) => { R(g, ax - 2, Y - 32 + off, 5, 12, BLK); R(g, ax - 1, Y - 31 + off, 3, 10, M); R(g, ax - 1, Y - 31 + off, 3, 2, Li); R(g, ax - 1, Y - 21 + off, 3, 3, PEACH); };
-    arm(X - 10, a1 > 0 ? a1 * 0.5 : a1 * 0.9); arm(X + 10, a2 > 0 ? a2 * 0.5 : a2 * 0.9);
-    R(g, X - 8, Y - 33, 16, 20, BLK); R(g, X - 7, Y - 32, 14, 18, M);
-    R(g, X - 7, Y - 28, 14, 2, Li); R(g, X - 7, Y - 22, 14, 2, Li); R(g, X - 1, Y - 32, 2, 18, Dk); R(g, X - 7, Y - 15, 14, 2, Dk);
-    D(g, X, Y - 38, 5, BLK); D(g, X, Y - 38, 4, '#6b3a1a'); R(g, X - 4, Y - 36, 8, 3, PEACH);
-    E(g, X, Y - 42, 6, 4, BLK); E(g, X, Y - 42, 5, 3, Li); R(g, X - 1, Y - 45, 2, 5, M); R(g, X - 7, Y - 39, 14, 2, BLK); R(g, X - 6, Y - 39, 12, 1, Dk);
+    const arm = (ax, off, rs) => {
+      const y = Y - 32 + Math.round(off);
+      R(g, ax - 2, y, 5, 12, BLK); R(g, ax - 1, y + 1, 3, 5, rs ? Ms : M); R(g, ax - 1, y + 1, 1, 4, rs ? M : Li);
+      R(g, ax - 1, y + 6, 3, 4, SKN); R(g, ax + 1, y + 6, 1, 4, SKd); R(g, ax - 1, y + 9, 3, 2, SKN);
+    };
+    arm(X - 10, a1 > 0 ? a1 * 0.5 : a1 * 0.9, 0); arm(X + 10, a2 > 0 ? a2 * 0.5 : a2 * 0.9, 1);
+    R(g, X - 7, Y - 33, 14, 1, BLK); R(g, X - 8, Y - 32, 16, 18, BLK); R(g, X - 7, Y - 32, 14, 16, M);
+    R(g, X + 4, Y - 32, 3, 16, Ms); R(g, X - 7, Y - 31, 1, 14, runMix(runH(M), runH(Li), 0.5));
+    R(g, X - 5, Y - 32, 2, 6, TP); R(g, X + 3, Y - 32, 2, 6, TPs);
+    R(g, X - 7, Y - 26, 11, 2, TP); R(g, X + 4, Y - 26, 3, 2, TPs); R(g, X - 7, Y - 21, 11, 2, TP); R(g, X + 4, Y - 21, 3, 2, TPs);
+    R(g, X - 7, Y - 16, 14, 2, TR); R(g, X - 1, Y - 16, 2, 1, '#c2c3c7');
+    R(g, X - 2, Y - 34, 4, 2, SKd);
+    D(g, X, Y - 38, 5, BLK); D(g, X, Y - 38, 4, '#4a2a14'); R(g, X - 3, Y - 37, 2, 1, '#6b3a1a');
+    R(g, X - 5, Y - 38, 1, 2, SKN); R(g, X + 4, Y - 38, 1, 2, SKd);
+    E(g, X, Y - 42, 6, 4, BLK); E(g, X, Y - 42, 5, 3, hat); R(g, X + 2, Y - 44, 3, 4, hatS); R(g, X - 1, Y - 45, 2, 5, hatS); R(g, X - 3, Y - 44, 2, 1, WHT);
+    R(g, X - 7, Y - 39, 14, 2, BLK); R(g, X - 6, Y - 39, 12, 1, hatS); R(g, X - 6, Y - 39, 4, 1, hat);
     if (stum && (Math.floor(t * 14) & 1)) R(g, X - 6, Y - 33, 12, 2, '#ffffff');
   }
   function drawBoss(g) {
@@ -937,31 +984,46 @@ function makeRunner(seed, skin) {
 
   /* ---------- HUD ---------- */
   function mmss(sec) { sec = Math.max(0, Math.ceil(sec)); return Math.floor(sec / 60) + ':' + (sec % 60 < 10 ? '0' : '') + (sec % 60); }
+  function panel(g, x, y, w, h, edge) {
+    g.globalAlpha = 0.66; R(g, x + 1, y + 1, w - 2, h - 2, BLK); g.globalAlpha = 1;
+    const e = edge == null ? '#0b0d1a' : edge;
+    R(g, x + 1, y, w - 2, 1, e); R(g, x + 1, y + h - 1, w - 2, 1, e); R(g, x, y + 1, 1, h - 2, e); R(g, x + w - 1, y + 1, 1, h - 2, e);
+    g.globalAlpha = 0.18; R(g, x + 1, y + 1, w - 2, 1, WHT); g.globalAlpha = 1;
+  }
   function drawHUD(g) {
-    g.globalAlpha = 0.5; R(g, 0, 0, VW, 52, BLK); g.globalAlpha = 0.3; R(g, 0, 52, VW, 3, BLK); g.globalAlpha = 1;
-    const rem = RUN_CAP - t;
-    T(g, RUN_TEXT.job, 4, 3, ORG, { sh: BLK }); T(g, mmss(rem), 4 + tw(RUN_TEXT.job) + 6, 3, rem < 10 ? ((Math.floor(t * 4) & 1) ? RED : WHT) : WHT, { sh: BLK });
-    R(g, 3, 13, 123, 8, BLK); R(g, 4, 14, 121, 6, NAVY);
-    const fr = clamp(t / RUN_CAP, 0, 1), fw = Math.round(121 * fr);
-    R(g, 4, 14, fw, 6, fr > 0.8 ? LIME : fr > 0.5 ? YEL : ORG); R(g, 4, 14, fw, 2, WHT);
-    for (let i = 1; i < 5; i++) R(g, 4 + i * 24, 14, 1, 6, BLK);
-    R(g, 4 + fw - 1, 12, 3, 10, WHT);
-    /* the rush order crate waiting at the end of the bar */
-    R(g, 129, 11, 13, 11, BLK); R(g, 130, 12, 11, 9, '#c98b4a'); R(g, 130, 12, 11, 2, YEL); L(g, 131, 15, 139, 20, '#8a5a2b'); L(g, 139, 15, 131, 20, '#8a5a2b');
-    T(g, String(Math.floor(me.score)), 4, 25, WHT, { s: 2, sh: BLK });
-    T(g, Math.floor(pz) + 'M', 4, 42, LGR, { sh: BLK });
-    blit(g, runSprites(0).coin[0], 62, 50, 1, 1); T(g, 'x' + quarters, 70, 42, YEL, { sh: BLK });
-    T(g, 'BEST ' + Math.max(RUN_BEST, Math.floor(me.score)), 174, 3, LGR, { al: 'r' });
-    /* threat meter: the foreman */
-    const th = near > 0.1;
-    g.globalAlpha = 1; R(g, 150, 22, 38, 14, BLK); R(g, 151, 23, 36, 12, th ? ((Math.floor(t * 6) & 1) ? '#7a0a1a' : '#3a0610') : '#1d2b53');
-    E(g, 160, 32, 5, 4, BLK); E(g, 160, 31, 4, 3, th ? '#ff4d4d' : DGR); R(g, 155, 31, 11, 2, BLK); R(g, 156, 31, 9, 1, th ? '#ff9a9a' : LGR);
-    R(g, 168, 26, 16, 6, BLK); R(g, 169, 27, 14, 4, DGR); R(g, 169, 27, Math.round(14 * clamp(near, 0, 1)), 4, near > 0.5 ? RED : ORG);
-    if (shield) { D(g, 172, 31, 3, '#29adff'); }
-    /* active power-ups */
-    let px0 = 4; const sp = runSprites(0).pup;
-    const chip = (img, frac) => { blit(g, img, px0 + 9, 76, 0.7, 1); R(g, px0, 78, 14, 3, BLK); R(g, px0 + 1, 79, Math.round(12 * frac), 1, WHT); px0 += 18; };
-    if (magnetT > 0) chip(sp.M, magnetT / 8); if (x2T > 0) chip(sp.X, x2T / 10); if (boostT > 0) chip(sp.B, boostT / 3.2); if (shield) chip(sp.S, 1);
+    const rem = RUN_CAP - t, lowT = rem < 10;
+    /* row 1: rush-order timer + progress to the loading dock */
+    panel(g, 2, 2, 172, 12);
+    T(g, RUN_TEXT.job, 5, 5, ORG);
+    T(g, mmss(rem), 50, 5, lowT ? ((Math.floor(t * 4) & 1) ? RED : WHT) : WHT);
+    const bx = 77, bw = 80, fr = clamp(t / RUN_CAP, 0, 1), fw = Math.round(bw * fr);
+    R(g, bx - 1, 5, bw + 2, 6, BLK); R(g, bx, 6, bw, 4, '#1d2b53');
+    const fcol = fr > 0.8 ? LIME : fr > 0.5 ? YEL : ORG;
+    R(g, bx, 6, fw, 4, fcol); R(g, bx, 6, fw, 1, runMix(runH(fcol), '#ffffff', 0.55)); R(g, bx, 9, fw, 1, runMix(runH(fcol), '#000000', 0.3));
+    for (let i = 1; i < 4; i++) R(g, bx + i * 20, 6, 1, 4, 'rgba(0,0,0,0.45)');
+    if (fw > 0) R(g, bx + fw - 1, 5, 2, 6, WHT);
+    R(g, 161, 4, 10, 8, BLK); R(g, 162, 5, 8, 6, '#c98b4a'); R(g, 162, 5, 8, 1, YEL); P(g, 163, 7, '#8a5a2b'); P(g, 168, 7, '#8a5a2b'); P(g, 164, 8, '#8a5a2b'); P(g, 167, 8, '#8a5a2b'); R(g, 165, 9, 2, 1, '#8a5a2b');
+    /* row 2 left: score, distance, quarters */
+    panel(g, 2, 16, 74, 28);
+    T(g, String(Math.floor(me.score)), 6, 19, WHT, { s: 2, sh: '#1d2b53' });
+    T(g, Math.floor(pz) + 'M', 6, 35, LGR);
+    const cxq = 45; D(g, cxq, 38, 3, '#7a4a00'); D(g, cxq, 38, 2, ORG); R(g, cxq - 1, 37, 2, 2, YEL); P(g, cxq - 1, 37, WHT);
+    T(g, 'x' + quarters, 51, 35, YEL);
+    /* row 2 right: the foreman threat meter + session best */
+    const th = near > 0.1, blink = th && (Math.floor(t * 6) & 1);
+    panel(g, 128, 16, 46, 28, blink ? '#7a0a1a' : null);
+    const fx = 136, fy0 = 20;
+    E(g, fx, fy0 + 6, 5, 4, BLK); E(g, fx, fy0 + 6, 4, 3, th ? PEACH : '#8a8f9c');
+    E(g, fx, fy0 + 2, 6, 3, BLK); E(g, fx, fy0 + 2, 5, 2, th ? '#e03a3a' : '#5f574f'); R(g, fx - 6, fy0 + 3, 13, 1, BLK);
+    R(g, fx - 3, fy0 + 5, 2, 1, BLK); R(g, fx + 2, fy0 + 5, 2, 1, BLK); R(g, fx - 2, fy0 + 8, 5, 1, th ? '#7a3a2a' : '#3a3a44');
+    const mx = 144, mw = 26; R(g, mx - 1, 22, mw + 2, 6, BLK); R(g, mx, 23, mw, 4, '#2a2f45');
+    const nf = Math.round(mw * clamp(near, 0, 1)); if (nf) { R(g, mx, 23, nf, 4, near > 0.5 ? RED : ORG); R(g, mx, 23, nf, 1, near > 0.5 ? '#ff8a9a' : '#ffd08a'); }
+    if (shield) { D(g, mx + mw + 1, 25, 2, BLK); D(g, mx + mw + 1, 25, 1, SKY); }
+    T(g, 'HI', 132, 35, ORG); T(g, String(Math.max(RUN_BEST, Math.floor(me.score))), 171, 35, WHT, { al: 'r' });
+    /* active power-ups: small chips under the score */
+    let px0 = 2; const sp = runSprites(0).pup;
+    const chip = (img, frac, c) => { panel(g, px0, 46, 18, 20); blit(g, img, px0 + 9, 61, 0.7, 1); R(g, px0 + 2, 62, 14, 2, '#1d2b53'); R(g, px0 + 2, 62, Math.max(1, Math.round(14 * frac)), 2, c); px0 += 20; };
+    if (magnetT > 0) chip(sp.M, magnetT / 8, '#ff4d6d'); if (x2T > 0) chip(sp.X, x2T / 10, ORG); if (boostT > 0) chip(sp.B, boostT / 3.2, YEL); if (shield) chip(sp.S, 1, SKY);
   }
   function drawPops(g) {
     for (const p of pops) {
@@ -1008,13 +1070,15 @@ function makeRunner(seed, skin) {
     for (const p of parts) { g.globalAlpha = Math.min(1, p.l / p.ml * 1.6); fc(g, p.c); g.fillRect(Math.round(p.x), Math.round(p.y), p.s, p.s); }
     g.globalAlpha = 1;
     g.restore();
-    if (near > 0.12 && !me.over) { const pu = 0.18 + 0.14 * Math.sin(t * 12); g.globalAlpha = pu * Math.min(1, near * 1.6); R(g, 0, 0, 5, VH, RED); R(g, VW - 5, 0, 5, VH, RED); R(g, 0, VH - 8, VW, 8, RED); g.globalAlpha = 1; if (Math.floor(t * 5) & 1) T(g, "DON'T TRIP!", 96, 60, RED, { al: 'c', sh: BLK, ol: BLK }); }
+    if (near > 0.12 && !me.over) { const pu = 0.18 + 0.14 * Math.sin(t * 12); g.globalAlpha = pu * Math.min(1, near * 1.6); R(g, 0, 0, 5, VH, RED); R(g, VW - 5, 0, 5, VH, RED); R(g, 0, VH - 8, VW, 8, RED); g.globalAlpha = 1; if (Math.floor(t * 5) & 1) T(g, "DON'T TRIP!", 96, 72, RED, { al: 'c', sh: BLK, ol: BLK }); }
     if (flash > 0) { g.globalAlpha = Math.min(0.5, flash * 2.2); fc(g, flashC); g.fillRect(0, 0, VW, VH); g.globalAlpha = 1; }
     drawHints(g); drawPops(g); drawHUD(g);
     if (me.over) {
       const k = Math.min(1, overT / 0.35);
-      g.globalAlpha = 0.5 * k; R(g, 0, 100, VW, 52, BLK); g.globalAlpha = k;
-      T(g, endMsg, 96, 112, won ? LIME : RED, { al: 'c', s: 2, sh: BLK, ol: BLK }); T(g, won ? 'BONUS +' + (250 + (near < 0.1 ? 150 : 0)) : 'DISTANCE ' + Math.floor(pz) + 'M', 96, 134, WHT, { al: 'c', sh: BLK });
+      const pw = Math.round(Math.min(188, Math.max(150, tw(endMsg, 2) + 16)) * (0.6 + 0.4 * k)), ac = won ? LIME : RED;
+      g.globalAlpha = k; panel(g, 96 - (pw >> 1), 100, pw, 50, ac); R(g, 96 - (pw >> 1) + 2, 102, pw - 4, 1, ac);
+      T(g, endMsg, 96, 110, ac, { al: 'c', s: 2, sh: BLK, ol: BLK }); R(g, 56, 129, 80, 1, runMix(runH(ac), '#000000', 0.5));
+      T(g, won ? 'BONUS +' + (250 + (near < 0.1 ? 150 : 0)) : 'DISTANCE ' + Math.floor(pz) + 'M', 96, 135, WHT, { al: 'c', sh: BLK });
       g.globalAlpha = 1;
     }
   };
@@ -1033,34 +1097,62 @@ function makeRunner(seed, skin) {
 
 /* ---------- box illustration (about 84x56) ---------- */
 function runArt(g, x, y, w, h) {
-  const cx = x + (w >> 1), hz = y + Math.round(h * 0.42);
-  R(g, x, y, w, h, '#1d2b53');
-  R(g, x, y, w, hz - y, '#38426e');
-  for (let i = 0; i < 5; i++) R(g, x, y + i * 3, w, 1, '#2c3562');
-  for (let i = 0; i < 4; i++) { const k = 1 - i * 0.22, ly = hz - 3 - Math.round(i * i * 2.2); R(g, cx - Math.round(3 * k), ly, Math.max(2, Math.round(6 * k)), 1, '#fffbe0'); }
-  R(g, cx - 5, hz - 7, 10, 8, '#fff6c8'); R(g, cx - 4, hz - 6, 8, 7, '#ffe27a'); R(g, cx - 5, hz - 7, 10, 1, '#ffffff');
-  PG(g, [[x, y], [cx - 5, hz - 7], [cx - 5, hz + 1], [x, y + h - 14]], '#6b78a8'); PG(g, [[x + w, y], [cx + 5, hz - 7], [cx + 5, hz + 1], [x + w, y + h - 14]], '#55608f');
-  PG(g, [[x, y + 6], [cx - 5, hz - 5], [cx - 5, hz - 3], [x, y + 14]], '#a8d8ff'); PG(g, [[x + w, y + 6], [cx + 5, hz - 5], [cx + 5, hz - 3], [x + w, y + 14]], '#8cc4f0');
-  E(g, cx, y + 9, 12, 4, BLK); E(g, cx, y + 9, 11, 3, '#e8eef5'); E(g, cx - 4, y + 8, 4, 2, '#29adff'); R(g, cx + 6, y + 8, 9, 2, '#e8eef5'); R(g, cx + 14, y + 5, 1, 5, RED);
-  R(g, cx - 14, y + 4, 28, 1, LGR); R(g, cx, y + 2, 1, 3, BLK); R(g, cx - 4, y, 1, 4, DGR); R(g, cx + 4, y, 1, 4, DGR);
-  PG(g, [[cx - 5, hz + 1], [cx + 5, hz + 1], [x + w, y + h - 14], [x + w, y + h], [x, y + h], [x, y + h - 14]], '#8d95a2');
-  for (let i = 0; i < 7; i++) { const k = (i + 1) / 7, yy = hz + 1 + Math.round(k * k * (h - (hz - y) - 1)); R(g, cx - Math.round(w / 2 * k), yy, Math.round(w * k), 1, i & 1 ? '#7a828f' : '#a0a8b4'); }
-  PG(g, [[cx - 5, hz + 1], [cx + 5, hz + 1], [cx + 28, y + h], [cx - 28, y + h]], '#a8b0bd');
-  L(g, cx - 2, hz + 1, cx - 15, y + h, WHT); L(g, cx + 2, hz + 1, cx + 15, y + h, WHT);
-  L(g, cx - 5, hz + 1, cx - 28, y + h, YEL); L(g, cx + 5, hz + 1, cx + 28, y + h, YEL);
-  E(g, x + 10, hz + 8, 8, 5, BLK); E(g, x + 10, hz + 7, 7, 4, '#e8eef5'); R(g, x + 9, hz + 1, 2, 5, DGR); L(g, x + 3, hz + 1, x + 17, hz + 3, LGR);
-  R(g, x + w - 16, hz + 5, 10, 7, BLK); R(g, x + w - 15, hz + 6, 8, 5, '#c8372d'); R(g, x + w - 14, hz + 8, 6, 1, '#8f2018');
-  const bx = cx - 21, by = hz + 8; R(g, bx, by, 13, 9, BLK); R(g, bx + 1, by + 1, 11, 7, '#c98b4a'); L(g, bx + 1, by + 3, bx + 11, by + 7, '#8a5a2b'); L(g, bx + 11, by + 3, bx + 1, by + 7, '#8a5a2b');
-  R(g, bx, by, 13, 3, BLK); for (let i = 0; i < 13; i += 4) R(g, bx + i, by, 2, 3, YEL);
-  R(g, cx - 12, hz + 2, 24, 3, BLK); for (let i = 0; i < 24; i += 4) { R(g, cx - 12 + i, hz + 3, 2, 1, RED); R(g, cx - 10 + i, hz + 3, 2, 1, WHT); }
-  for (let i = 0; i < 5; i++) { const k = 0.2 + i * 0.17, yy = hz + 6 + Math.round(k * (h - (hz - y) - 8) * 0.95), xx = cx + 3 + Math.round(k * 17); D(g, xx, yy, 1 + (i > 2 ? 1 : 0), YEL); P(g, xx, yy, ORG); if (i === 3) P(g, xx - 1, yy - 1, WHT); }
-  const rx = cx + 3, ry = y + h - 3;
-  R(g, rx - 6, ry + 1, 13, 2, '#5f6878');
-  R(g, rx - 3, ry - 6, 3, 7, BLK); R(g, rx + 1, ry - 4, 3, 5, BLK); R(g, rx - 2, ry - 6, 1, 6, BRN); R(g, rx + 2, ry - 4, 1, 4, BRN);
-  R(g, rx - 4, ry - 14, 9, 9, BLK); R(g, rx - 3, ry - 13, 7, 7, ORG); R(g, rx - 3, ry - 11, 7, 1, YEL); R(g, rx - 3, ry - 8, 7, 1, YEL);
-  R(g, rx - 6, ry - 13, 2, 6, BLK); R(g, rx + 4, ry - 12, 2, 5, BLK); R(g, rx - 6, ry - 13, 1, 5, ORG); R(g, rx + 5, ry - 12, 1, 4, ORG);
-  D(g, rx, ry - 16, 3, BLK); D(g, rx, ry - 16, 2, BRN); R(g, rx - 3, ry - 19, 7, 2, BLK); R(g, rx - 2, ry - 19, 5, 1, YEL);
-  for (let i = 0; i < 5; i++) { const hh = hash2(i, 31); P(g, x + 3 + hh % (w - 6), y + 3 + (hh >>> 8) % (h - 20), WHT); }
+  const cx = x + (w >> 1), vy = y + 16, dw = 6, dh = 6, fb = y + h;
+  /* ceiling + walls converging on a blazing hangar door */
+  R(g, x, y, w, h, '#141a3a');
+  PG(g, [[x, y], [x + w, y], [cx + dw, vy - dh], [cx - dw, vy - dh]], '#1d2b53');
+  for (let i = 0; i < 4; i++) { const k = [0.18, 0.36, 0.6, 0.9][i], ly = Math.round(vy - dh - (vy - dh - y) * k), lw = Math.max(2, Math.round(4 + 22 * k)); R(g, cx - (lw >> 1), ly, lw, Math.max(1, Math.round(2 * k)), i > 1 ? '#c7f0ff' : '#7fb8e8'); }
+  PG(g, [[x, y + 2], [cx - dw, vy - dh], [cx - dw, vy + dh], [x, fb - 12]], '#2b3a72');
+  PG(g, [[x + w, y + 2], [cx + dw, vy - dh], [cx + dw, vy + dh], [x + w, fb - 12]], '#222e60');
+  PG(g, [[x, y + 12], [cx - dw, vy - 3], [cx - dw, vy], [x, y + 26]], '#5f86d0'); PG(g, [[x + w, y + 12], [cx + dw, vy - 3], [cx + dw, vy], [x + w, y + 26]], '#4a6fb8');
+  for (const k of [0.25, 0.55, 0.85]) { const xl = Math.round(cx - dw - (cx - dw - x) * k); R(g, xl, y, Math.max(1, Math.round(3 * k)), h, '#141a3a'); R(g, 2 * cx - xl - Math.max(1, Math.round(3 * k)), y, Math.max(1, Math.round(3 * k)), h, '#141a3a'); }
+  R(g, cx - dw, vy - dh, dw * 2, dh * 2, '#ff9a3c'); R(g, cx - dw + 1, vy - dh + 1, dw * 2 - 2, dh * 2 - 2, '#ffd08a'); R(g, cx - 3, vy - dh + 2, 6, dh * 2 - 3, '#fff1e8');
+  /* floor with lane lines */
+  PG(g, [[cx - dw, vy + dh], [cx + dw, vy + dh], [x + w, fb - 12], [x + w, fb], [x, fb], [x, fb - 12]], '#3a3f5c');
+  for (let i = 0; i < 6; i++) { const k = (i + 1) / 6, yy = vy + dh + Math.round(k * k * (fb - vy - dh)); R(g, x, yy, w, 1, '#30344e'); }
+  PG(g, [[cx - dw, vy + dh], [cx + dw, vy + dh], [cx + 34, fb], [cx - 34, fb]], '#4e5576');
+  L(g, cx - dw, vy + dh, cx - 34, fb, YEL); L(g, cx + dw - 1, vy + dh, cx + 33, fb, YEL);
+  L(g, cx - 2, vy + dh, cx - 12, fb, '#c2c3c7'); L(g, cx + 2, vy + dh, cx + 12, fb, '#c2c3c7');
+  g.globalAlpha = 0.35; PG(g, [[cx - 4, vy + dh], [cx + 4, vy + dh], [cx + 16, fb], [cx - 16, fb]], '#ffd08a'); g.globalAlpha = 1;
+  /* hanging helicopter overhead (side view) */
+  const hx = x + 17, hy = y + 6;
+  L(g, hx - 6, y, hx - 4, hy - 4, '#5f574f'); L(g, hx + 8, y, hx + 6, hy - 4, '#5f574f');
+  R(g, hx - 17, hy - 5, 34, 2, BLK); R(g, hx - 16, hy - 5, 32, 1, '#c2c3c7'); R(g, hx - 1, hy - 4, 2, 2, BLK);
+  E(g, hx, hy + 2, 10, 5, BLK); E(g, hx, hy + 2, 9, 4, '#e03a3a'); E(g, hx - 1, hy + 1, 6, 2, '#ff6a6a'); E(g, hx - 5, hy + 1, 4, 2, BLK); E(g, hx - 5, hy + 1, 3, 1, '#9ad8ff');
+  R(g, hx + 8, hy + 1, 13, 3, BLK); R(g, hx + 8, hy + 2, 12, 1, '#e03a3a'); R(g, hx + 19, hy - 3, 3, 7, BLK); R(g, hx + 20, hy - 2, 1, 5, WHT);
+  R(g, hx - 7, hy + 7, 14, 1, BLK); R(g, hx - 4, hy + 6, 1, 2, BLK); R(g, hx + 3, hy + 6, 1, 2, BLK);
+  /* parked jig helicopter, right wall */
+  E(g, x + 8, fb - 18, 9, 5, BLK); E(g, x + 8, fb - 18, 8, 4, '#8a95b5'); E(g, x + 7, fb - 20, 5, 1, '#c2c8dc'); R(g, x, fb - 25, 18, 1, '#c2c3c7'); R(g, x + 8, fb - 24, 1, 2, BLK);
+  R(g, x + 3, fb - 13, 12, 2, BLK); R(g, x + 4, fb - 13, 10, 1, '#4a7ab0');
+  /* coins arcing toward the door */
+  const cn = [[cx + 4, vy + 9, 1], [cx + 6, vy + 13, 1], [cx + 8, vy + 18, 1], [cx + 10, vy + 24, 2]];
+  for (const c of cn) { D(g, c[0], c[1], c[2] + 1, '#7a4a00'); D(g, c[0], c[1], c[2], ORG); if (c[2] > 1) { P(g, c[0] - 1, c[1] - 1, YEL); P(g, c[0], c[1] - 1, WHT); } else P(g, c[0], c[1], YEL); }
+  /* striped barrier the runner is clearing */
+  const bx = cx - 24, by = y + 29;
+  R(g, bx + 2, by + 3, 2, 4, BLK); R(g, bx + 14, by + 3, 2, 4, BLK);
+  R(g, bx, by, 18, 4, BLK); for (let i = 0; i < 16; i++) R(g, bx + 1 + i, by + 1, 1, 2, ((i >> 1) & 1) ? BLK : YEL); R(g, bx + 1, by + 1, 16, 1, '#ffe86a');
+  /* the runner, from behind, mid-leap */
+  const rx = cx - 5, ry = fb - 9;
+  g.globalAlpha = 0.4; E(g, rx, fb - 1, 8, 2, BLK); g.globalAlpha = 1;
+  R(g, rx - 6, ry - 2, 5, 9, BLK); R(g, rx - 5, ry - 2, 3, 7, '#2a3560'); R(g, rx - 6, ry + 5, 5, 3, BLK); R(g, rx - 5, ry + 6, 3, 1, LGR);
+  R(g, rx + 1, ry - 2, 5, 6, BLK); R(g, rx + 2, ry - 2, 3, 4, '#2a3560'); R(g, rx + 1, ry + 3, 6, 3, BLK); R(g, rx + 2, ry + 4, 4, 1, LGR);
+  R(g, rx - 10, ry - 20, 4, 9, BLK); R(g, rx - 9, ry - 19, 2, 4, ORG); R(g, rx - 9, ry - 15, 2, 3, PEACH);
+  R(g, rx + 6, ry - 22, 4, 9, BLK); R(g, rx + 7, ry - 21, 2, 4, BRN); R(g, rx + 7, ry - 17, 2, 3, PEACH);
+  R(g, rx - 6, ry - 15, 12, 1, BLK); R(g, rx - 7, ry - 14, 14, 13, BLK); R(g, rx - 6, ry - 14, 12, 12, ORG); R(g, rx + 3, ry - 14, 3, 12, BRN);
+  R(g, rx - 6, ry - 10, 9, 2, '#e8eef5'); R(g, rx + 3, ry - 10, 3, 2, '#a9b4c4'); R(g, rx - 6, ry - 6, 9, 1, '#e8eef5'); R(g, rx + 3, ry - 6, 3, 1, '#a9b4c4'); R(g, rx - 6, ry - 3, 12, 1, '#2a3560');
+  D(g, rx, ry - 18, 4, BLK); D(g, rx, ry - 18, 3, '#4a2a14');
+  E(g, rx, ry - 21, 5, 3, BLK); E(g, rx, ry - 21, 4, 2, YEL); R(g, rx + 1, ry - 22, 3, 3, '#c98a10'); P(g, rx - 2, ry - 22, WHT); R(g, rx - 6, ry - 19, 12, 2, BLK); R(g, rx - 5, ry - 19, 10, 1, '#c98a10');
+  /* speed streaks */
+  for (let i = 0; i < 6; i++) { const hh = hash2(i, 41), sd = i & 1 ? 1 : -1, yy = y + 14 + (hh % 30), xx = sd < 0 ? x + 1 + (hh >>> 8) % 10 : x + w - 2 - (hh >>> 8) % 10; L(g, xx, yy, xx + sd * 5, yy + 2, 'rgba(255,255,255,0.55)'); }
+  /* the foreman bursting in, bottom-left, clipboard raised */
+  const fx = x + w - 8, fy = fb + 4;
+  E(g, fx, fy - 3, 11, 9, BLK); E(g, fx, fy - 3, 10, 8, '#f2f2f2'); R(g, fx - 1, fy - 9, 3, 9, '#c8372d');
+  D(g, fx, fy - 14, 6, BLK); D(g, fx, fy - 14, 5, PEACH); R(g, fx - 4, fy - 16, 3, 1, BLK); R(g, fx + 2, fy - 16, 3, 1, BLK); P(g, fx - 2, fy - 14, BLK); P(g, fx + 3, fy - 14, BLK);
+  R(g, fx - 3, fy - 11, 7, 2, BLK); R(g, fx - 2, fy - 11, 5, 1, RED);
+  E(g, fx, fy - 19, 7, 4, BLK); E(g, fx, fy - 19, 6, 3, '#e03a3a'); R(g, fx - 7, fy - 17, 15, 2, BLK); R(g, fx - 6, fy - 17, 13, 1, '#ff6a6a'); R(g, fx - 2, fy - 22, 2, 1, WHT);
+  R(g, fx - 16, fy - 22, 7, 9, BLK); R(g, fx - 15, fy - 21, 5, 7, '#c9a46a'); R(g, fx - 14, fy - 19, 3, 1, DGR); R(g, fx - 14, fy - 17, 3, 1, DGR);
+  R(g, fx - 10, fy - 13, 3, 4, BLK); R(g, fx - 9, fy - 13, 1, 3, PEACH);
+  T(g, '!', fx - 2, fy - 33, RED, { ol: BLK });
 }
 
 const DEF_RUNNER = {

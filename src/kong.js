@@ -15,10 +15,10 @@ function kongStage(seed, skin, opts) {
   const me = { score: 0, ended: false, over: false, settle: true, buttons: [] };
   const arrowBtn = (dx, dy) => (g, cx, cy) => { if (dx) arrowH(g, cx, cy, dx, 9, WHT); else arrowV(g, cx, cy, dy, 9, WHT); };
   me.buttons = [
-    { id: 'left', x: 2, y: 264, w: 38, h: 68, key: ['ArrowLeft', 'KeyA'], c: DGR, cd: LGR, icon: arrowBtn(-1, 0) },
-    { id: 'up', x: 42, y: 264, w: 40, h: 33, key: ['ArrowUp', 'KeyW'], c: DGR, cd: LGR, icon: arrowBtn(0, -1) },
-    { id: 'down', x: 42, y: 299, w: 40, h: 33, key: ['ArrowDown', 'KeyS'], c: DGR, cd: LGR, icon: arrowBtn(0, 1) },
-    { id: 'right', x: 84, y: 264, w: 40, h: 68, key: ['ArrowRight', 'KeyD'], c: DGR, cd: LGR, icon: arrowBtn(1, 0) },
+    { id: 'left', x: 2, y: 264, w: 38, h: 68, key: ['ArrowLeft', 'KeyA'], c: DGR, cd: NAVY, icon: arrowBtn(-1, 0) },
+    { id: 'up', x: 42, y: 264, w: 40, h: 33, key: ['ArrowUp', 'KeyW'], c: DGR, cd: NAVY, icon: arrowBtn(0, -1) },
+    { id: 'down', x: 42, y: 299, w: 40, h: 33, key: ['ArrowDown', 'KeyS'], c: DGR, cd: NAVY, icon: arrowBtn(0, 1) },
+    { id: 'right', x: 84, y: 264, w: 40, h: 68, key: ['ArrowRight', 'KeyD'], c: DGR, cd: NAVY, icon: arrowBtn(1, 0) },
     { id: 'jump', x: 128, y: 264, w: 62, h: 68, key: ['Space', 'KeyX', 'KeyZ', 'KeyJ'], c: skin.dark, cd: skin.main, hi: skin.light, label: 'JUMP', icon: (g, cx, cy) => { D(g, cx, cy + 1, 7, WHT); D(g, cx, cy + 1, 5, skin.main); } }
   ];
 
@@ -378,21 +378,28 @@ function kongStage(seed, skin, opts) {
   /* ---------- drawing: static layer ---------- */
   const G3 = TH.g;
   function drawGirder(g, p) {
+    /* truss girder: bright top flange, zig-zag web, dark bottom flange, bolts */
     for (let x = p.x0; x < p.x1; x++) {
-      const i = x - p.x0, yy = Math.round(surf(p, x + 0.5));
-      R(g, x, yy, 1, 1, G3[1]); R(g, x, yy + 1, 1, 4, G3[0]); R(g, x, yy + 5, 1, 1, G3[2]);
-      if ((i & 7) < 2) R(g, x, yy + 2, 1, 2, BLK); else if (((i + 4) & 7) < 2) R(g, x, yy + 3, 1, 1, G3[2]);
+      const i = x - p.x0, yy = Math.round(surf(p, x + 0.5)), m = i % 6;
+      R(g, x, yy, 1, 1, G3[1]); R(g, x, yy + 1, 1, 1, G3[0]); R(g, x, yy + 2, 1, 2, BLK); R(g, x, yy + 4, 1, 1, G3[0]); R(g, x, yy + 5, 1, 1, G3[2]);
+      if (m === 0 || m === 5) R(g, x, yy + 3, 1, 1, G3[2]); else if (m === 1 || m === 4) R(g, x, yy + 2, 1, 2, G3[0]); else R(g, x, yy + 2, 1, 1, G3[0]);
+      if (i % 12 === 3) R(g, x, yy + 1, 1, 1, G3[1]);
     }
-    R(g, p.x0, Math.round(p.ya), 1, 6, G3[2]);
+    R(g, p.x0, Math.round(p.ya), 1, 6, G3[2]); R(g, p.x1 - 1, Math.round(p.yb), 1, 6, G3[2]);
   }
   function drawLadder(g, L, c) {
     const x = Math.round(L.x), t = Math.round(L.top), b = Math.round(L.bot);
-    const seg = (y0, y1) => { R(g, x - 3, y0, 1, y1 - y0, c); R(g, x + 3, y0, 1, y1 - y0, c); for (let y = y0 + 1; y < y1; y += 4) R(g, x - 3, y, 7, 1, c); };
+    const seg = (y0, y1) => { R(g, x - 3, y0, 1, y1 - y0, c); R(g, x + 3, y0, 1, y1 - y0, c); R(g, x + 4, y0, 1, y1 - y0, TH.bgl); for (let y = y0 + 1; y < y1; y += 4) { R(g, x - 2, y, 5, 1, c); R(g, x - 2, y + 1, 5, 1, TH.bgl); } };
     if (L.full) seg(t, b); else { const m = t + Math.round((b - t) * 0.45), m2 = t + Math.round((b - t) * 0.7); seg(t, m); seg(m2, b); R(g, x - 3, m, 2, 1, c); R(g, x + 2, m2 - 1, 2, 1, c); }
   }
   function drawPillarsBg(g) {
-    for (let x = 16; x < SW; x += 32) R(g, x, 0, 1, SHT, TH.bgl);
-    for (let y = 8; y < SHT; y += 32) { for (let x = 0; x < SW; x += 4) P(g, x, y, TH.bgl); }
+    /* calm night: sparse stars, faint dithered scaffold towers, dim skyline */
+    for (let i = 0; i < 40; i++) { const q = hash2(seed + i, 13); P(g, q % SW, (q >>> 8) % 160, ((q >>> 20) % 5) ? NAVY : DGR); }
+    for (let x = 22; x < SW; x += 50) {
+      for (let y = 0; y < SHT; y += 2) { P(g, x, y, TH.bgl); P(g, x + 8, y + 1, TH.bgl); }
+      for (let y = ((x / 50) | 0) * 7; y < SHT - 8; y += 16) for (let k = 0; k < 8; k += 2) P(g, x + k, y + k, TH.bgl);
+    }
+    let bx = 0; while (bx < SW) { const w = 10 + hash2(seed, bx) % 14, ht = 16 + hash2(bx, seed) % 30; for (let y = SHT - ht; y < SHT; y++) for (let x = bx; x < Math.min(SW, bx + w); x++) if (((x + y) & 1) === 0) P(g, x, y, NAVY); bx += w + 3; }
   }
   function drawBarrelPile(g, x, y) {
     for (let k = 0; k < 2; k++) for (let j = 0; j < 2 - k; j++) {
@@ -401,9 +408,9 @@ function kongStage(seed, skin, opts) {
     }
   }
   function drawDrum(g, x, y) {
-    R(g, x, y - 17, 18, 17, BLK); R(g, x + 1, y - 16, 16, 15, SKY); R(g, x + 1, y - 16, 3, 15, WHT); R(g, x + 14, y - 16, 3, 15, NAVY);
-    R(g, x + 1, y - 13, 16, 1, NAVY); R(g, x + 1, y - 4, 16, 1, NAVY);
-    T(g, 'OIL', x + 9, y - 11, RED, { al: 'c' });
+    R(g, x, y - 17, 18, 17, BLK); R(g, x + 1, y - 16, 16, 15, SKY); R(g, x + 1, y - 16, 2, 15, WHT); R(g, x + 3, y - 16, 1, 15, SKY); R(g, x + 13, y - 16, 2, 15, LAV); R(g, x + 15, y - 16, 2, 15, NAVY);
+    R(g, x, y - 14, 18, 1, NAVY); R(g, x, y - 4, 18, 1, NAVY); R(g, x + 1, y - 17, 16, 1, LGR);
+    R(g, x + 2, y - 12, 14, 7, WHT); T(g, 'OIL', x + 9, y - 11, RED, { al: 'c' });
   }
   function drawStatic(g) {
     R(g, 0, 0, SW, SHT, TH.bg); drawPillarsBg(g);
@@ -433,10 +440,11 @@ function kongStage(seed, skin, opts) {
   function drawApe(g, x, y, face, kind) {
     /* kind: 0 idle, 1 pound L, 2 pound R, 3 grab, 4 throw */
     const f = face || 1;
-    const arm = (sx, sy, ex, ey) => TL(g, x + sx * f, y + sy, x + ex * f, y + ey, 2, FUR, BLK);
+    y += kind === 1 ? -1 : 0;
+    const arm = (sx, sy, ex, ey) => { TL(g, x + sx * f, y + sy, x + ex * f, y + ey, 2, FUR, BLK); D(g, x + ex * f, y + ey, 3, BLK); D(g, x + ex * f, y + ey, 2, FUR); P(g, x + ex * f - 1, y + ey - 1, ORG); };
     E(g, x - 6, y - 4, 4, 4, BLK); E(g, x + 6, y - 4, 4, 4, BLK); E(g, x - 6, y - 4, 3, 3, FURD); E(g, x + 6, y - 4, 3, 3, FURD);
-    E(g, x, y - 12, 11, 9, BLK); E(g, x, y - 12, 10, 8, FUR); E(g, x - 3, y - 14, 5, 5, FURD);
-    E(g, x + 1, y - 9, 5, 4, ORG); P(g, x, y - 11, YEL); P(g, x + 1, y - 11, YEL);
+    E(g, x, y - 12, 11, 9, BLK); E(g, x, y - 12, 10, 8, FUR); E(g, x - 4 * f, y - 12, 5, 7, FURD); R(g, x - 6, y - 19, 4, 1, ORG); R(g, x + 3, y - 19, 4, 1, ORG);
+    E(g, x + 1, y - 9, 6, 5, BLK); E(g, x + 1, y - 9, 5, 4, ORG); R(g, x - 2, y - 11, 3, 1, YEL); R(g, x - 2, y - 7, 6, 1, BRN); R(g, x - 1, y - 5, 4, 1, BRN);
     if (kind === 1) { arm(-8, -19, -9, -26); arm(8, -17, 2, -11); }
     else if (kind === 2) { arm(8, -19, 9, -26); arm(-8, -17, -2, -11); }
     else if (kind === 3) { arm(-8, -16, 4, -17); arm(8, -16, 4, -17); }
@@ -445,7 +453,7 @@ function kongStage(seed, skin, opts) {
     if (kind === 3) { D(g, x + 5 * f, y - 19, 5, BLK); D(g, x + 5 * f, y - 19, 4, ORG); R(g, x + 1 * f + (f > 0 ? 0 : 4), y - 21, 8, 1, BRN); R(g, x + 1 * f + (f > 0 ? 0 : 4), y - 18, 8, 1, BRN); }
     /* head */
     const hx = x + 2 * f, hy = y - 24;
-    E(g, hx, hy, 8, 6, BLK); E(g, hx, hy, 7, 5, FUR);
+    E(g, hx, hy, 8, 6, BLK); E(g, hx, hy, 7, 5, FUR); R(g, hx - 3, hy - 5, 5, 1, ORG); R(g, hx - 1, hy - 7, 2, 1, FUR); P(g, hx, hy - 7, BLK);
     E(g, hx + 1 * f, hy + 1, 5, 4, PEACH);
     R(g, hx - 3 + (f > 0 ? 0 : 0), hy - 3, 7, 1, BLK);
     R(g, hx - 2, hy - 1, 2, 2, WHT); R(g, hx + 1, hy - 1, 2, 2, WHT); P(g, hx - 1 + (f > 0 ? 0 : -1) + 1, hy, BLK); P(g, hx + 2 + (f > 0 ? 0 : -1) + 1, hy, BLK);
@@ -471,8 +479,9 @@ function kongStage(seed, skin, opts) {
   }
   function drawFire(g, f) {
     const x = Math.round(f.x), y = Math.round(f.y), a = Math.floor(f.t * 9) & 1;
+    E(g, x, y - 4, 5, 5, BLK); R(g, x - 4 + a * 4, y - 10, 4, 4, BLK); R(g, x - 2, y - 12 + a, 4, 5, BLK); R(g, x + 1 - a * 4, y - 10, 4, 4, BLK);
     E(g, x, y - 4, 4, 4, RED); E(g, x, y - 4, 3, 3, ORG); E(g, x, y - 3, 2, 2, YEL);
-    R(g, x - 3 + a * 4, y - 9, 2, 3, RED); R(g, x - 1, y - 11 + a, 2, 4, ORG); R(g, x + 2 - a * 4, y - 9, 2, 3, RED);
+    R(g, x - 3 + a * 4, y - 9, 2, 3, RED); R(g, x - 1, y - 11 + a, 2, 4, ORG); P(g, x, y - 10 + a, YEL); R(g, x + 2 - a * 4, y - 9, 2, 3, RED);
     R(g, x - 2, y - 5, 2, 2, WHT); R(g, x + 1, y - 5, 2, 2, WHT); P(g, x - 1, y - 4, BLK); P(g, x + 2, y - 4, BLK);
   }
   function drawPie(g, q) {
@@ -508,8 +517,8 @@ function kongStage(seed, skin, opts) {
 
   function drawHero(g, ox, oy, o) {
     o = o || {}; const h = hero, f = h.face >= 0 ? 1 : -1, ox0 = Math.round(ox), oy0 = Math.round(oy);
-    const X = (a, w) => f > 0 ? ox0 + a : ox0 - a - w + 1;
-    const r = (a, b, w, hh, c) => R(g, X(a, w), oy0 + b, w, hh, c);
+    const X = (a, w) => f > 0 ? ox0 + a : ox0 - a - w + 1, sil = o.sil;
+    const r = (a, b, w, hh, c) => R(g, X(a, w), oy0 + b, w, hh, sil != null ? sil : c);
     const st = o.st || h.st, back = st === 'ladder', hm = (o.hammer != null ? o.hammer : h.hammer) > 0;
     const fr = Math.floor(o.walk != null ? o.walk : h.walk) & 1, cf = Math.floor(h.climb) & 1;
     const air = st === 'air';
@@ -519,7 +528,7 @@ function kongStage(seed, skin, opts) {
     else if (h.vx !== 0 && st === 'ground' && !o.idle) { if (fr) { r(-4, -3, 3, 3, skin.dark); r(2, -3, 2, 2, skin.dark); r(-4, -1, 4, 1, BRN); r(2, -1, 3, 1, BRN); } else { r(-2, -3, 2, 3, skin.dark); r(1, -3, 3, 3, skin.dark); r(-3, -1, 3, 1, BRN); r(1, -1, 4, 1, BRN); } }
     else { r(-3, -3, 2, 3, skin.dark); r(1, -3, 2, 3, skin.dark); r(-4, -1, 3, 1, BRN); r(1, -1, 4, 1, BRN); }
     /* torso */
-    r(-3, -8, 6, 5, skin.main); r(-3, -8, 6, 1, skin.light); r(-1, -8, 2, 2, skin.light); P(g, X(0, 1), oy0 - 5, YEL);
+    r(-3, -8, 6, 5, skin.main); r(-3, -8, 6, 1, skin.light); r(-1, -8, 2, 2, skin.light); r(0, -5, 1, 1, YEL);
     /* arms */
     if (hm) { const sw = Math.floor(tt * 8) & 1; r(2, -8, 3, 2, skin.light); if (!sw) { r(3, -19, 1, 11, BRN); r(1, -22, 6, 4, BLK); r(2, -21, 4, 2, LGR); r(2, -21, 4, 1, WHT); } else { r(4, -9, 9, 1, BRN); r(11, -12, 4, 7, BLK); r(12, -11, 2, 5, LGR); r(12, -11, 2, 1, WHT); } }
     else if (air) { r(-4, -12, 2, 5, skin.light); r(2, -13, 2, 6, skin.light); r(2, -14, 2, 1, PEACH); r(-4, -13, 2, 1, PEACH); }
@@ -530,13 +539,18 @@ function kongStage(seed, skin, opts) {
     else { r(-3, -13, 6, 5, PEACH); r(-4, -12, 1, 3, BRN); r(-3, -14, 6, 2, skin.main); r(3, -13, 3, 1, skin.dark); r(1, -11, 1, 1, BLK); r(2, -9, 3, 1, BRN); r(4, -11, 1, 1, PEACH); }
     r(-3, -14, 4, 1, skin.light);
   }
+  const OLD = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+  function heroOL(g, x, y, o) { /* 1px black outline so the hero pops off ladders and girders */
+    for (const d of OLD) drawHero(g, x + d[0], y + d[1], Object.assign({ sil: BLK }, o));
+    drawHero(g, x, y, o);
+  }
   function drawHeroSpr(g) {
     const h = hero;
     if (h.st === 'dead') {
-      const k = Math.floor(h.spin) & 3; g.save(); g.translate(Math.round(h.x), Math.round(h.y - 7)); g.rotate(k * Math.PI / 2); drawHero(g, 0, 7, { st: 'air' }); g.restore(); return;
+      const k = Math.floor(h.spin) & 3; g.save(); g.translate(Math.round(h.x), Math.round(h.y - 7)); g.rotate(k * Math.PI / 2); heroOL(g, 0, 7, { st: 'air' }); g.restore(); return;
     }
     if (inv > 0 && (Math.floor(tt * 14) & 1)) return;
-    drawHero(g, h.x, h.y, {});
+    heroOL(g, h.x, h.y, {});
   }
 
   function dynamic(g) {
@@ -546,7 +560,7 @@ function kongStage(seed, skin, opts) {
     hammers.forEach(o => drawPick(g, o)); picks.forEach(o => drawPick(g, o));
     if (ST === 0) {
       const dp = plats[0], dy = Math.round(surf(dp, 14));
-      if (drumFlare > 0 || drumHits > 0) { const a = Math.floor(tt * 10) & 1, big = drumFlare > 0 ? 6 : 3; E(g, 14, dy - 20 - big / 2, 5, big, RED); E(g, 14, dy - 20 - big / 2, 3, big - 1, ORG); E(g, 14, dy - 19, 2, 2 + a, YEL); }
+      { const a = Math.floor(tt * 10) & 1, big = drumFlare > 0 ? 6 : drumHits > 0 ? 4 : 3; E(g, 14, dy - 19 - big / 2, 6, big + 1, BLK); E(g, 14, dy - 19 - big / 2, 5, big, RED); E(g, 14 + (a ? 1 : -1), dy - 19 - big / 2, 3, big - 1, ORG); E(g, 14, dy - 19, 2, 1 + a, YEL); P(g, 12 + a * 4, dy - 22 - big - a, ORG); }
     }
     /* ape */
     const ap = ape; let ay = ap.ped ? 40 : surf(plats[ap.pl], ap.x), kind = 0;
@@ -562,7 +576,7 @@ function kongStage(seed, skin, opts) {
     else if (tm < 1 && ready <= 0 || (ready > 0)) { }
     barrels.forEach(b => drawBarrel(g, b)); pies.forEach(q => drawPie(g, q)); springs.forEach(s => drawSpring(g, s)); fires.forEach(f => drawFire(g, f));
     if (!won || true) drawHeroSpr(g);
-    if (hero.hammer > 0 && hero.hammer < 2 && (Math.floor(tt * 10) & 1)) { }
+    if (hero.hammer > 0 && hero.st !== 'dead') { const bx = Math.round(hero.x) - 8, by = Math.round(hero.y) - 28; R(g, bx, by, 17, 4, BLK); R(g, bx + 1, by + 1, Math.max(1, Math.round(15 * hero.hammer / HAMMER_T)), 2, hero.hammer < 2 && (Math.floor(tt * 10) & 1) ? RED : YEL); }
     parts.forEach(q => R(g, q.x, q.y, 2, 2, q.c));
     pops.forEach(q => T(g, q.s, clamp(q.x, 14 + tw(q.s) / 2, 178 - tw(q.s) / 2), q.y - q.t * 14, q.c, { al: 'c', ol: BLK }));
   }
@@ -571,11 +585,42 @@ function kongStage(seed, skin, opts) {
     const gp = plats[goalPl >= 0 ? goalPl : 5];
     if (ST !== 3 && tm < 8) { const by = Math.round(Math.sin(tt * 7) * 2); const ax = cap.x, ay = gp.ya - 24 + by; PG(g, [[ax - 4, ay - 6], [ax + 5, ay - 6], [ax, ay + 1]], BLK, 1); PG(g, [[ax - 4, ay - 6], [ax + 5, ay - 6], [ax, ay + 1]], YEL); }
     if (ST === 3 && tm < 8) { const nx = rivets.find(r => !r.got); if (nx) { const by = Math.round(Math.sin(tt * 7) * 2), ax = nx.x, ay = plats[nx.pl].ya - 9 + by; PG(g, [[ax - 4, ay - 6], [ax + 5, ay - 6], [ax, ay + 1]], BLK, 1); PG(g, [[ax - 4, ay - 6], [ax + 5, ay - 6], [ax, ay + 1]], YEL); } }
-    if (ready > 0 && tm === 0 && deaths === 0) {
-      const l1 = ST === 2 ? 'RIDE THE LIFTS UP!' : ST === 3 ? 'REMOVE ALL 8 RIVETS!' : 'CLIMB TO THE TOP!';
-      const l2 = ST === 0 ? 'JUMP BARRELS. GRAB HAMMER' : ST === 1 ? 'BELTS PUSH YOU. JUMP PIES' : ST === 2 ? 'TIME YOUR JUMPS. HOP SPRINGS' : 'WALK OVER THEM. AVOID FIRE';
-      R(g, 0, 104, SW, 34, 'rgba(14,12,26,.82)'); T(g, l1, 96, 110, YEL, { al: 'c', ol: BLK }); T(g, l2, 96, 122, WHT, { al: 'c' });
-    }
+    /* HELP! call from the captive once the goal arrow is gone */
+    if (ST !== 3 && tm >= 8 && !won && (Math.floor(tt * 1.5) % 3 === 0)) { const s = 'HELP!', hx = clamp(cap.x + 2, 4 + tw(s) / 2, 172 - tw(s) / 2), hy = Math.max(1, gp.ya - 26); T(g, s, hx, hy, PINK, { al: 'c', ol: BLK }); }
+  }
+  /* stage hint lives in the HUD band, off the playfield */
+  const showHint = () => !me.over && deaths === 0 && tm < 2.5;
+  function hintBar(g) {
+    const l1 = ST === 2 ? 'RIDE THE LIFTS UP!' : ST === 3 ? 'REMOVE ALL 8 RIVETS!' : 'CLIMB TO THE TOP!';
+    const l2 = ST === 0 ? 'JUMP BARRELS. GRAB HAMMER' : ST === 1 ? 'BELTS PUSH YOU. JUMP PIES' : ST === 2 ? 'TIME YOUR JUMPS. HOP SPRINGS' : 'WALK OVER THEM. AVOID FIRE';
+    R(g, 0, 0, SW, OY, BLK); R(g, 1, 1, 174, OY - 2, G3[2]); R(g, 2, 2, 172, OY - 4, NAVY); R(g, 2, 2, 172, 1, G3[0]);
+    T(g, l1, 88, 4, YEL, { al: 'c', sh: BLK }); T(g, l2, 88, 13, WHT, { al: 'c' });
+  }
+  function hud(g) {
+    R(g, 0, 0, SW, OY, BLK); R(g, 0, OY - 2, SW, 1, G3[2]); R(g, 0, OY - 1, SW, 1, BLK);
+    /* left: 1UP + lives, score */
+    T(g, '1UP', 3, 2, RED);
+    for (let i = 0; i < 3; i++) { const x = 25 + i * 8, on = i < lives; R(g, x, 2, 7, 7, BLK); R(g, x + 1, 2, 5, 2, on ? skin.main : DGR); R(g, x + 1, 4, 5, 3, on ? PEACH : DGR); if (on) { P(g, x + 4, 5, BLK); R(g, x + 1, 2, 5, 1, skin.light); } R(g, x + 1, 7, 5, 1, on ? skin.dark : DGR); }
+    T(g, String(Math.max(0, Math.round(me.score))).padStart(6, '0'), 3, 12, YEL, { sh: BLK });
+    /* centre: arcade bonus box */
+    const bv = bonus(), low = bv < 1000;
+    R(g, 61, 1, 40, 19, G3[1]); R(g, 62, 2, 38, 17, BLK); R(g, 62, 2, 38, 8, G3[2]);
+    T(g, 'BONUS', 81, 3, WHT, { al: 'c' }); T(g, String(bv), 81, 11, low && (Math.floor(tt * 4) & 1) ? RED : low ? ORG : YEL, { al: 'c' });
+    /* right: time + stage (kept clear of the pause icon) */
+    const tl = Math.max(0, Math.ceil(CAP_T - tm - T0));
+    T(g, String(tl), 174, 2, tl <= 10 ? RED : WHT, { al: 'r' }); T(g, 'TIME', 174 - tw(String(tl)) - 5, 2, LGR, { al: 'r' });
+    T(g, (ST + 1) + ' ' + KONG_NAMES[ST], 174, 12, G3[1], { al: 'r' });
+  }
+  let deckC = null;
+  function deck(g) {
+    if (deckC === null) { try { deckC = document.createElement('canvas'); deckC.width = SW; deckC.height = VH; deckPaint(deckC.getContext('2d')); } catch (e) { deckC = false; } }
+    if (deckC) g.drawImage(deckC, 0, OY + SHT, SW, VH - OY - SHT, 0, OY + SHT, SW, VH - OY - SHT); else deckPaint(g);
+  }
+  function deckPaint(g) {
+    const y0 = OY + SHT; R(g, 0, y0, SW, VH - y0, BLK); R(g, 0, y0, SW, 1, G3[2]);
+    R(g, 0, y0 + 2, SW, VH - y0 - 2, NAVY);
+    for (let y = y0 + 3; y < VH; y += 2) for (let x = (y & 2) ? 0 : 2; x < SW; x += 4) P(g, x, y, BLK);
+    R(g, 125, y0 + 4, 2, VH - y0 - 8, BLK);
   }
   me.draw = g => {
     R(g, 0, 0, SW, VH, BLK);
@@ -584,19 +629,15 @@ function kongStage(seed, skin, opts) {
     dynamic(g); hint(g);
     if (flash > 0) { g.fillStyle = 'rgba(255,241,232,.5)'; g.fillRect(0, 0, SW, SHT); }
     g.restore();
-    /* HUD */
-    R(g, 0, 0, SW, OY, BLK); R(g, 0, OY - 1, SW, 1, NAVY);
-    T(g, String(Math.max(0, Math.round(me.score))).padStart(6, '0'), 4, 3, YEL, { sh: BLK });
-    for (let i = 0; i < 3; i++) { const x = 4 + i * 9, on = i < lives; R(g, x, 12, 7, 7, BLK); R(g, x + 1, 13, 5, 2, on ? skin.main : DGR); R(g, x + 1, 15, 5, 3, on ? PEACH : DGR); }
-    T(g, 'BONUS', 56, 3, LGR); const bv = bonus(); T(g, String(bv), 90, 3, bv < 1000 ? RED : WHT);
-    T(g, (ST + 1) + ' ' + KONG_NAMES[ST], 56, 12, G3[1]);
-    const tl = Math.max(0, Math.ceil(CAP_T - tm - T0)); T(g, tl + 'S', 170, 12, tl <= 10 ? RED : LGR, { al: 'r' });
-    if (hero.hammer > 0) { R(g, 128, 3, 40, 6, BLK); R(g, 129, 4, Math.round(38 * hero.hammer / HAMMER_T), 4, hero.hammer < 2 ? RED : ORG); }
+    /* HUD + control deck */
+    if (showHint()) hintBar(g); else hud(g);
+    deck(g);
     if (me.over) {
-      R(g, 0, 96, SW, 58, 'rgba(14,12,26,.8)');
-      T(g, endMsg, 96, 104, won ? YEL : RED, { al: 'c', s: tw(endMsg, 2) <= 176 ? 2 : 1, ol: BLK });
-      if (won) T(g, 'BONUS +' + me.__bonus, 96, 126, WHT, { al: 'c' });
-      T(g, 'SCORE ' + Math.round(me.score), 96, 138, LGR, { al: 'c' });
+      const ac = won ? YEL : RED;
+      R(g, 15, 93, 162, 56, BLK); R(g, 16, 94, 160, 54, ac); R(g, 17, 95, 158, 52, NAVY); R(g, 17, 95, 158, 1, WHT); R(g, 17, 146, 158, 1, BLK);
+      T(g, endMsg, 96, 102, ac, { al: 'c', s: tw(endMsg, 2) <= 150 ? 2 : 1, sh: BLK });
+      if (won) T(g, 'BONUS +' + me.__bonus, 96, 122, WHT, { al: 'c' });
+      T(g, 'SCORE ' + Math.round(me.score), 96, won ? 134 : 128, LGR, { al: 'c' });
     }
   };
   me.theme = () => TH.n;
@@ -643,7 +684,7 @@ function makeKong(seed, skin) {
   me.draw = g => {
     cur.draw(g);
     const d = cur.debug();
-    if (d.won) { const nx = KONG_NAMES[order[(idx + 1) % 4]]; R(g, 0, 154, VW, 14, 'rgba(14,12,26,.8)'); T(g, 'NEXT: ' + nx, 96, 158, YEL, { al: 'c', ol: BLK }); }
+    if (d.won) { const nx = KONG_NAMES[order[(idx + 1) % 4]]; R(g, 31, 151, 130, 15, BLK); R(g, 32, 152, 128, 13, NAVY); T(g, 'NEXT: ' + nx, 96, 155, YEL, { al: 'c', sh: BLK }); }
   };
   me.theme = () => cur.theme();
   me.summary = () => { const c = cur.__ctr(); return ['STAGES CLEARED ' + cleared, 'JUMPS ' + (ctr.jumped + c.jumped) + '  SMASHES ' + (ctr.smashed + c.smashed), 'ITEMS ' + (ctr.picked + c.picked) + '  LIVES ' + Math.max(0, cur.__lives())]; };
@@ -656,30 +697,42 @@ const DEF_KONG = {
   how: ['>CLIMB', 'REACH THE TOP AND RESCUE', 'THE CAPTIVE. CLEAR A STAGE', 'AND THE NEXT ONE STARTS:', 'GIRDERS, BELTS, LIFTS,', 'RIVETS. BEAT THE CLOCK.', '>JUMP', 'THE ARC IS LOCKED IN THE', 'AIR. HOP BARRELS +100.', 'FALLING FAR IS FATAL.', '>HAMMER', 'SMASH STUFF +300. THEN', 'BEAT THE BONUS CLOCK.']
   ,
   art(g, x, y, w, h) {
-    R(g, x, y, w, h, BLK);
-    for (let i = 0; i < 14; i++) { const hh = hash2(i, 9); P(g, x + hh % w, y + ((hh >>> 8) % h), NAVY); }
-    const gird = (gx0, gx1, ya, yb) => { for (let xx = gx0; xx < gx1; xx++) { const yy = Math.round(ya + (yb - ya) * (xx - gx0) / (gx1 - gx0)); R(g, x + xx, y + yy, 1, 1, PINK); R(g, x + xx, y + yy + 1, 1, 3, RED); R(g, x + xx, y + yy + 4, 1, 1, PLUM); if (((xx - gx0) & 7) < 2) R(g, x + xx, y + yy + 2, 1, 1, BLK); } };
-    const lad = (lx, t, b) => { R(g, x + lx - 2, y + t, 1, b - t, SKY); R(g, x + lx + 2, y + t, 1, b - t, SKY); for (let yy = t + 1; yy < b; yy += 3) R(g, x + lx - 2, y + yy, 5, 1, SKY); };
-    gird(0, 62, 26, 29); gird(60, 84, 14, 14); gird(10, w, 40, 37); gird(0, w, 53, 51);
-    lad(50, 29, 40); lad(24, 40, 53); lad(66, 15, 38);
-    /* ape on the top girder */
-    const ax = x + 17, ay = y + 26;
-    E(g, ax - 4, ay - 2, 3, 2, BLK); E(g, ax + 4, ay - 2, 3, 2, BLK);
-    E(g, ax, ay - 8, 8, 7, BLK); E(g, ax, ay - 8, 7, 6, BRN); E(g, ax + 1, ay - 7, 4, 3, ORG);
-    E(g, ax + 1, ay - 16, 6, 5, BLK); E(g, ax + 1, ay - 16, 5, 4, BRN); E(g, ax + 2, ay - 15, 4, 3, PEACH);
-    R(g, ax, ay - 17, 2, 2, WHT); R(g, ax + 3, ay - 17, 2, 2, WHT); P(g, ax + 1, ay - 16, BLK); P(g, ax + 4, ay - 16, BLK); R(g, ax + 1, ay - 13, 4, 1, RED);
-    TL(g, ax - 7, ay - 9, ax - 9, ay - 16, 1, BRN, BLK); TL(g, ax + 7, ay - 8, ax + 12, ay - 5, 1, BRN, BLK);
-    /* captive on the ledge */
-    const cx = x + 72, cy = y + 14;
-    PG(g, [[cx - 1, cy - 6], [cx + 1, cy - 6], [cx + 3, cy], [cx - 3, cy]], PINK); D(g, cx, cy - 8, 2, PEACH); R(g, cx - 2, cy - 11, 5, 2, YEL); R(g, cx + 2, cy - 12, 3, 2, RED); R(g, cx + 3, cy - 8, 1, 3, PEACH);
-    /* barrels */
-    [[x + 40, y + 23], [x + 58, y + 35]].forEach(b => { D(g, b[0], b[1], 3, BLK); D(g, b[0], b[1], 2, ORG); R(g, b[0] - 2, b[1], 5, 1, BRN); });
-    /* hero climbing */
-    const hx = x + 24, hy = y + 50;
-    R(g, hx - 3, hy - 2, 2, 2, BRN); R(g, hx + 1, hy - 3, 2, 2, BRN); R(g, hx - 2, hy - 7, 5, 5, ORG); R(g, hx - 2, hy - 7, 5, 1, YEL);
-    R(g, hx - 2, hy - 12, 5, 5, BRN); R(g, hx - 2, hy - 13, 5, 2, ORG); R(g, hx - 4, hy - 10, 2, 3, YEL); R(g, hx + 3, hy - 8, 2, 3, YEL);
-    /* oil drum */
-    R(g, x + 2, y + 39, 11, 12, BLK); R(g, x + 3, y + 40, 9, 10, SKY); R(g, x + 3, y + 40, 2, 10, WHT); R(g, x + 3, y + 43, 9, 1, NAVY);
-    E(g, x + 7, y + 36, 3, 3, RED); E(g, x + 7, y + 36, 2, 2, YEL);
+    /* night sky, big moon behind the brute, red truss girders, hero leaping a barrel */
+    R(g, x, y, w, h, BLK); R(g, x, y + 30, w, h - 30, NAVY); DT(g, x, y + 24, w, 6, BLK, NAVY, 0);
+    for (let i = 0; i < 18; i++) { const q = hash2(i, 9); P(g, x + q % w, y + ((q >>> 8) % 26), (q >>> 20) % 3 ? LAV : WHT); }
+    let bx = 0; while (bx < w) { const bw = 6 + hash2(bx, 4) % 8, bh = 8 + hash2(bx, 5) % 14; R(g, x + bx, y + h - bh, bw, bh, BLK); if (bh > 12) P(g, x + bx + 2, y + h - bh + 3, YEL); bx += bw + 1; }
+    D(g, x + 33, y + 12, 11, PEACH); D(g, x + 34, y + 11, 10, YEL); D(g, x + 38, y + 8, 2, ORG); D(g, x + 40, y + 15, 1, ORG); P(g, x + 31, y + 5, ORG);
+    const gird = (gx0, gx1, ya, yb) => { for (let xx = gx0; xx < gx1; xx++) { const yy = Math.round(ya + (yb - ya) * (xx - gx0) / Math.max(1, gx1 - gx0)), m = (xx - gx0) % 5; R(g, x + xx, y + yy - 1, 1, 7, BLK); R(g, x + xx, y + yy, 1, 1, PINK); R(g, x + xx, y + yy + 1, 1, 1, RED); R(g, x + xx, y + yy + 2, 1, 1, m < 2 ? RED : BLK); R(g, x + xx, y + yy + 3, 1, 1, m === 2 || m === 4 ? RED : BLK); R(g, x + xx, y + yy + 4, 1, 1, PLUM); } };
+    const lad = (lx, t, b) => { R(g, x + lx - 3, y + t, 1, b - t, SKY); R(g, x + lx + 3, y + t, 1, b - t, SKY); for (let yy = t + 1; yy < b; yy += 3) R(g, x + lx - 2, y + yy, 5, 1, SKY); };
+    lad(64, 18, 36); lad(22, 39, 50);
+    gird(0, 46, 29, 29); gird(52, w, 13, 13); gird(16, w, 40, 36); gird(0, w, 51, 50);
+    /* the brute, pounding his chest */
+    const ax = x + 19, ay = y + 28;
+    E(g, ax - 6, ay - 3, 4, 3, BLK); E(g, ax + 6, ay - 3, 4, 3, BLK); E(g, ax - 6, ay - 3, 3, 2, PLUM); E(g, ax + 6, ay - 3, 3, 2, PLUM);
+    E(g, ax, ay - 11, 11, 9, BLK); E(g, ax, ay - 11, 10, 8, BRN); E(g, ax - 4, ay - 11, 5, 6, PLUM); E(g, ax + 2, ay - 8, 6, 4, ORG); R(g, ax - 1, ay - 10, 3, 1, YEL);
+    TL(g, ax + 8, ay - 16, ax + 13, ay - 26, 2, BRN, BLK); D(g, ax + 13, ay - 27, 3, BLK); D(g, ax + 13, ay - 27, 2, BRN);
+    TL(g, ax - 8, ay - 15, ax - 1, ay - 10, 2, BRN, BLK); D(g, ax - 1, ay - 10, 3, BLK); D(g, ax - 1, ay - 10, 2, BRN);
+    const hx = ax + 1, hy = ay - 22;
+    E(g, hx, hy, 8, 6, BLK); E(g, hx, hy, 7, 5, BRN); E(g, hx + 1, hy + 1, 5, 4, PEACH); R(g, hx - 3, hy - 3, 8, 1, BLK);
+    R(g, hx - 2, hy - 1, 2, 2, WHT); R(g, hx + 2, hy - 1, 2, 2, WHT); P(g, hx - 1, hy, BLK); P(g, hx + 3, hy, BLK);
+    R(g, hx - 2, hy + 2, 6, 3, BLK); R(g, hx - 1, hy + 3, 4, 1, RED); R(g, hx - 1, hy + 2, 4, 1, WHT);
+    /* barrel pile + rolling barrels */
+    const bar = (bx0, by0) => { D(g, bx0, by0, 4, BLK); D(g, bx0, by0, 3, ORG); R(g, bx0 - 3, by0 - 1, 7, 1, BRN); R(g, bx0 - 3, by0 + 1, 7, 1, BRN); P(g, bx0 - 2, by0 - 2, YEL); };
+    bar(x + 44, y + 33); bar(x + 56, y + 46);
+    /* the captive on her ledge */
+    const cx = x + 74, cy = y + 13;
+    PG(g, [[cx - 1, cy - 7], [cx + 1, cy - 7], [cx + 4, cy], [cx - 4, cy]], BLK, 1); PG(g, [[cx - 1, cy - 7], [cx + 1, cy - 7], [cx + 4, cy], [cx - 4, cy]], PINK);
+    D(g, cx, cy - 9, 3, BLK); D(g, cx, cy - 9, 2, PEACH); R(g, cx - 3, cy - 12, 6, 2, YEL); R(g, cx - 3, cy - 10, 1, 4, YEL); R(g, cx + 2, cy - 13, 2, 2, RED); R(g, cx - 5, cy - 8, 1, 3, PEACH);
+    R(g, cx + 5, cy - 13, 2, 2, RED); R(g, cx + 8, cy - 13, 2, 2, RED); R(g, cx + 5, cy - 12, 5, 2, RED); R(g, cx + 6, cy - 10, 3, 1, RED); P(g, cx + 7, cy - 9, RED);
+    /* the hero, mid-leap over a barrel */
+    const px = x + 55, py = y + 38;
+    R(g, px - 5, py - 13, 10, 15, BLK);
+    R(g, px - 4, py - 12, 7, 2, ORG); R(g, px + 1, py - 11, 3, 1, BRN); R(g, px - 3, py - 10, 6, 4, PEACH); P(g, px + 1, py - 9, BLK); R(g, px - 4, py - 9, 1, 2, BRN);
+    R(g, px - 3, py - 6, 6, 4, ORG); R(g, px - 3, py - 6, 6, 1, YEL); R(g, px - 4, py - 2, 3, 3, BRN); R(g, px + 1, py - 3, 3, 2, BRN);
+    R(g, px - 6, py - 11, 2, 4, YEL); R(g, px + 4, py - 12, 2, 4, YEL); P(g, px - 6, py - 12, PEACH); P(g, px + 4, py - 13, PEACH);
+    P(g, px - 9, py + 3, WHT); P(g, px - 11, py + 5, WHT); P(g, px + 8, py + 4, WHT);
+    /* oil drum + flames */
+    R(g, x + 3, y + 39, 11, 12, BLK); R(g, x + 4, y + 40, 9, 10, SKY); R(g, x + 4, y + 40, 2, 10, WHT); R(g, x + 11, y + 40, 2, 10, NAVY); R(g, x + 4, y + 42, 9, 1, NAVY); R(g, x + 4, y + 47, 9, 1, NAVY);
+    E(g, x + 8, y + 35, 5, 4, BLK); E(g, x + 8, y + 35, 4, 3, RED); E(g, x + 8, y + 36, 2, 2, ORG); P(g, x + 8, y + 36, YEL); R(g, x + 6, y + 30, 1, 3, ORG); R(g, x + 10, y + 31, 1, 2, RED);
   }
 };

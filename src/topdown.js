@@ -20,24 +20,30 @@ const TD_CARS = {
 };
 const TD_NF = 32;
 function tdBitmap(type) {
-  const d = TD_CARS[type], rows = [];
+  /* facing +x (front at the right). k outline, m body, d shade, e highlight, l roof, w glass, v glass glint, r tail, h head, s stripe, a/b light bar, y taxi sign */
+  const d = TD_CARS[type], rows = [], box = type === 'truck' || type === 'van';
   for (let y = 0; y < d.h; y++) {
     let s = '';
     for (let x = 0; x < d.w; x++) {
       let ch = 'm';
-      const ex = x === 0 || x === d.w - 1, ey = y === 0 || y === d.h - 1;
+      const ex = x === 0 || x === d.w - 1, ey = y === 0 || y === d.h - 1, cab = y >= 2 && y <= d.h - 3, mid = y >= 3 && y <= d.h - 4;
       if (ex && ey) ch = '.';
       else if (ex || ey) ch = 'k';
       else if (x === 1) ch = (y === 1 || y === d.h - 2) ? 'r' : 'd';
-      else if (x === d.w - 2) ch = (y === 1 || y === d.h - 2) ? 'h' : 'd';
-      else if (y >= 2 && y <= d.h - 3) {
+      else if (x === d.w - 2) ch = (y === 1 || y === d.h - 2) ? 'h' : 'm';
+      else if (y === d.h - 2) ch = 'd';
+      else if (y === 1) ch = 'e';
+      else if (box && cab && x >= d.c0 && x <= d.c1) ch = (x === d.c0 || y === 2) ? 'e' : (y === d.h - 3 || x === d.c1) ? 'd' : 'l';
+      else if (cab) {
         if (x === d.c0 - 1) ch = 'w';
         else if (x >= d.c0 && x <= d.c1) ch = 'l';
-        else if (x === d.c1 + 1) ch = 'v';
+        else if (x === d.c1 + 1) ch = y === 2 ? 'v' : 'w';
+        else if (x === d.c1 + 2 && !box) ch = 'w';
+        else if (mid && (x < d.c0 - 1 || x > d.c1 + 2)) ch = 's';
       }
-      if (type === 'cop' && x === ((d.c0 + d.c1) >> 1) && y >= 2 && y <= d.h - 3) ch = y < d.h / 2 ? 'a' : 'b';
-      if (type === 'taxi' && x === ((d.c0 + d.c1) >> 1) && (y === 3 || y === 4)) ch = 'y';
-      if (type === 'truck' && x > 2 && x < 13 && y >= 2 && y <= d.h - 3 && ch === 'l' && (x & 3) === 0) ch = 'm';
+      if (type === 'cop' && x === ((d.c0 + d.c1) >> 1) && cab) ch = y < d.h / 2 ? 'a' : 'b';
+      if (type === 'taxi' && x === ((d.c0 + d.c1) >> 1) && mid) ch = 'y';
+      if (type === 'truck' && cab && x > d.c0 && x < d.c1 && (x & 3) === 0) ch = 'd';
       s += ch;
     }
     rows.push(s);
@@ -45,11 +51,13 @@ function tdBitmap(type) {
   return rows;
 }
 const TD_SPR = {};
+/* one-step-lighter palette ramp for highlights */
+const TD_HI = [DGR, LAV, LAV, LIME, ORG, LGR, WHT, WHT, PINK, PEACH, WHT, WHT, WHT, LGR, PEACH, WHT];
 function tdSpr(type, cols, phase) {
-  const key = type + '|' + cols.m + '|' + cols.d + '|' + cols.l + '|' + (phase | 0) + (cols.o != null ? '|o' + cols.o : '');
+  const key = type + '|' + cols.m + '|' + cols.d + '|' + cols.l + '|' + (phase | 0) + (cols.o != null ? '|o' + cols.o : '') + (cols.s != null ? '|s' + cols.s : '');
   if (TD_SPR[key]) return TD_SPR[key];
   const d = TD_CARS[type], bm = tdBitmap(type), S = Math.ceil(Math.hypot(d.w, d.h)) + 2 + (cols.o != null ? 2 : 0);
-  const pm = { k: BLK, m: cols.m, d: cols.d, l: cols.l, w: NAVY, v: SKY, r: RED, h: YEL, y: YEL, a: phase ? SKY : RED, b: phase ? RED : SKY };
+  const pm = { k: BLK, m: cols.m, d: cols.d, e: cols.e != null ? cols.e : TD_HI[cols.m], l: cols.l, w: NAVY, v: SKY, r: RED, h: WHT, s: cols.s != null ? cols.s : cols.m, y: YEL, a: phase ? SKY : RED, b: phase ? RED : SKY };
   const fr = [], sh = [];
   for (let f = 0; f < TD_NF; f++) {
     const an = f / TD_NF * Math.PI * 2, ca = Math.cos(an), sa = Math.sin(an);
@@ -62,13 +70,13 @@ function tdSpr(type, cols, phase) {
       const sx = Math.floor(ca * dx + sa * dy + d.w / 2), sy = Math.floor(-sa * dx + ca * dy + d.h / 2);
       if (sx < 0 || sy < 0 || sx >= d.w || sy >= d.h) continue;
       const ch = bm[sy][sx]; if (ch === '.') continue;
-      u[j * S + i] = PAL32[pm[ch]]; u2[j * S + i] = (80 << 24);
+      u[j * S + i] = PAL32[pm[ch]]; u2[j * S + i] = (96 << 24);
     }
     if (cols.o != null) { /* optional 1px outline (hero car) */
       const src = u.slice(), oc = PAL32[cols.o];
       for (let j = 0; j < S; j++) for (let i = 0; i < S; i++) {
         if (src[j * S + i]) continue;
-        if ((i > 0 && src[j * S + i - 1]) || (i < S - 1 && src[j * S + i + 1]) || (j > 0 && src[(j - 1) * S + i]) || (j < S - 1 && src[(j + 1) * S + i])) { u[j * S + i] = oc; u2[j * S + i] = (80 << 24); }
+        if ((i > 0 && src[j * S + i - 1]) || (i < S - 1 && src[j * S + i + 1]) || (j > 0 && src[(j - 1) * S + i]) || (j < S - 1 && src[(j + 1) * S + i])) { u[j * S + i] = oc; u2[j * S + i] = (96 << 24); }
       }
     }
     g.putImageData(im, 0, 0); g2.putImageData(im2, 0, 0); fr.push(c); sh.push(c2);
@@ -78,8 +86,25 @@ function tdSpr(type, cols, phase) {
 function tdDrawSpr(g, spr, a, x, y, z) {
   const f = (((Math.round(a / (Math.PI * 2) * TD_NF)) % TD_NF) + TD_NF) % TD_NF, h = spr.S >> 1;
   z = z || 0;
-  g.drawImage(spr.sh[f], Math.round(x) - h + 1 + Math.round(z * 0.3), Math.round(y) - h + 1);
+  g.drawImage(spr.sh[f], Math.round(x) - h + 2 + Math.round(z * 0.3), Math.round(y) - h + 2 + Math.round(z * 0.15));
   g.drawImage(spr.fr[f], Math.round(x) - h, Math.round(y) - h - Math.round(z));
+}
+
+/* hero marker: dark halo + crisp ring with rotating gaps + a small bobbing chevron, drawn under the player's car */
+function tdHeroMark(g, x, y, z, t, c, arrow) {
+  x = Math.round(x); y = Math.round(y); z = z || 0;
+  const cy = y + Math.round(z * 0.15);
+  D(g, x, cy, 12, 'rgba(6,4,18,0.42)');
+  const r = 12.5, rot = t * 1.6, col = (Math.floor(t * 3) & 1) ? WHT : c;
+  for (let i = 0; i < 72; i++) {
+    const an = i / 72 * 6.2832, seg = ((an + rot) % 1.5708) / 1.5708; if (seg > 0.8) continue;
+    const px = Math.round(x + Math.cos(an) * r), py = Math.round(cy + Math.sin(an) * r);
+    P(g, px, py + 1, BLK); P(g, px, py, col);
+  }
+  if (arrow !== false) {
+    const ay = Math.round(y - 20 - z * 0.6 - Math.abs(Math.sin(t * 4)) * 2), tri = [[x - 4, ay - 4], [x + 4, ay - 4], [x, ay + 1]];
+    PG(g, tri, BLK, 1.2); PG(g, tri, col);
+  }
 }
 
 /* ---- car object ---- */
@@ -252,63 +277,83 @@ function tdNightBeam(g, c, ox, oy) {
 }
 
 /* ---- tile baking ---- */
+/* calm, low-contrast city: flat roads with crisp markings, curbed sidewalks with big slabs, roofs with parapets,
+   south facades and shadows cast to the east/south so the cars and pickups pop */
+const TD_SHADE = 'rgba(8,6,20,0.36)';
 function tdBakeMap(m, th) {
   const cv = document.createElement('canvas'); cv.width = m.pw; cv.height = m.ph; const g = cv.getContext('2d');
-  const at = (x, y) => m.at(x, y);
+  const at = (x, y) => m.at(x, y), dAt = (x, y) => (x < 0 || y < 0 || x >= m.w || y >= m.h) ? -1 : m.d[y * m.w + x];
+  const isRd = v => v === 1 || v === 5;
   for (let ty = 0; ty < m.h; ty++) for (let tx = 0; tx < m.w; tx++) {
     const t = m.t[ty * m.w + tx], d = m.d[ty * m.w + tx], x = tx * 8, y = ty * 8, h = hash2(tx, ty);
     if (t === 0) {
       R(g, x, y, 8, 8, th.grass[0]);
-      for (let k = 0; k < 3; k++) { const hh = hash2(tx * 3 + k, ty * 5 + 1); if ((hh >>> 9) % 3) P(g, x + (hh & 7), y + ((hh >>> 3) & 7), th.grass[1 + ((hh >>> 6) & 1)]); }
+      if ((h & 3) === 0) { const px = x + 1 + ((h >>> 4) % 5), py = y + 1 + ((h >>> 8) % 5); P(g, px, py, th.grass[2]); P(g, px + 1, py + 1, th.grass[2]); }
+      if ((h >>> 12) % 11 === 0) { const px = x + 2 + ((h >>> 16) & 3), py = y + 2 + ((h >>> 18) & 3); P(g, px, py, th.grass[1]); }
     } else if (t === 1 || t === 5) {
       const base = t === 1 ? th.road : th.lot;
       R(g, x, y, 8, 8, base[0]);
-      if (h % 5 === 0) P(g, x + (h >>> 4 & 7), y + (h >>> 8 & 7), base[1]);
-      if (h % 23 === 0) R(g, x + 2, y + 3, 3, 2, base[1]);
+      if (t === 1 && (h % 41) === 0) { g.fillStyle = 'rgba(0,0,0,0.16)'; g.fillRect(x + 2, y + 3, 3, 2); g.fillRect(x + 3, y + 2, 1, 4); }
       if (t === 1) {
+        /* gutter shade along the curb */
+        g.fillStyle = 'rgba(0,0,0,0.22)';
+        if (at(tx, ty - 1) === 2) g.fillRect(x, y, 8, 1); if (at(tx - 1, ty) === 2) g.fillRect(x, y, 1, 8);
+        if (at(tx, ty + 1) === 2) g.fillRect(x, y + 7, 8, 1); if (at(tx + 1, ty) === 2) g.fillRect(x + 7, y, 1, 8);
         const lc = th.line;
-        if (d & 1) R(g, x + 7, y, 1, 4, lc); if (d & 2) R(g, x, y, 1, 4, lc);
-        if (d & 4) R(g, x, y + 7, 4, 1, lc); if (d & 8) R(g, x, y, 4, 1, lc);
+        if (d & 1) R(g, x + 7, y + 1, 1, 4, lc); if (d & 2) R(g, x, y + 1, 1, 4, lc);
+        if (d & 4) R(g, x + 1, y + 7, 4, 1, lc); if (d & 8) R(g, x + 1, y, 4, 1, lc);
         if (d & 16) { R(g, x, y + 1, 8, 2, th.zebra); R(g, x, y + 5, 8, 2, th.zebra); }
         if (d & 32) { R(g, x + 1, y, 2, 8, th.zebra); R(g, x + 5, y, 2, 8, th.zebra); }
-        if (d & 64) R(g, x + 3, y, 2, 4, lc);
-        if (d & 128) R(g, x, y + 3, 4, 2, lc);
+        if (d & 64) R(g, x + 3, y + 1, 2, 4, lc);
+        if (d & 128) R(g, x + 1, y + 3, 4, 2, lc);
       } else {
         const lc = th.lotLine;
         if (d & 1) R(g, x + 7, y, 1, 8, lc); if (d & 2) R(g, x, y, 1, 8, lc);
         if (d & 4) R(g, x, y + 7, 8, 1, lc); if (d & 8) R(g, x, y, 8, 1, lc);
       }
     } else if (t === 2) {
-      R(g, x, y, 8, 8, th.walk[0]); R(g, x + 7, y, 1, 8, th.walk[1]); R(g, x, y + 7, 8, 1, th.walk[1]);
-      const nb = [[0, -1], [0, 1], [-1, 0], [1, 0]];
-      nb.forEach((n, i) => { const v = at(tx + n[0], ty + n[1]); if (v === 1 || v === 5) { if (i === 0) R(g, x, y, 8, 1, th.walk[2]); else if (i === 1) R(g, x, y + 6, 8, 2, th.walk[2]); else if (i === 2) R(g, x, y, 1, 8, th.walk[2]); else R(g, x + 7, y, 1, 8, th.walk[2]); } });
+      R(g, x, y, 8, 8, th.walk[0]);
+      /* big paving slabs (every 2 tiles), dithered seams */
+      fc(g, th.walk[1]);
+      if ((tx & 1) === 1) for (let j = (ty & 1); j < 8; j += 2) g.fillRect(x + 7, y + j, 1, 1);
+      if ((ty & 1) === 1) for (let i = (tx & 1); i < 8; i += 2) g.fillRect(x + i, y + 7, 1, 1);
+      /* curb: bright lip + dark drop on the road side */
+      const cc = th.walk[2];
+      if (isRd(at(tx, ty - 1))) R(g, x, y, 8, 1, cc); if (isRd(at(tx, ty + 1))) { R(g, x, y + 6, 8, 1, cc); R(g, x, y + 7, 8, 1, th.walk[1]); }
+      if (isRd(at(tx - 1, ty))) R(g, x, y, 1, 8, cc); if (isRd(at(tx + 1, ty))) R(g, x + 7, y, 1, 8, cc);
     } else if (t === 3) {
       const rf = th.bld.roofs[d % th.bld.roofs.length];
+      const same = (xx, yy) => at(xx, yy) === 3 && dAt(xx, yy) === d;
       R(g, x, y, 8, 8, rf[0]);
-      const up = at(tx, ty - 1) !== 3, dn = at(tx, ty + 1) !== 3, lf = at(tx - 1, ty) !== 3, rt = at(tx + 1, ty) !== 3;
-      if (!up && !lf && !rt && !dn) {
-        if (tx % 4 === 3) R(g, x + 7, y, 1, 8, rf[1]); if (ty % 4 === 3) R(g, x, y + 7, 8, 1, rf[1]);
-        if (h % 6 === 0) { R(g, x + 1, y + 1, 5, 5, BLK); R(g, x + 2, y + 2, 3, 3, rf[1]); R(g, x + 2, y + 2, 3, 1, rf[2]); P(g, x + 3, y + 3, BLK); }
-        else if (h % 9 === 3) { R(g, x + 1, y + 2, 6, 4, th.bld.win); R(g, x + 1, y + 2, 6, 1, rf[2]); P(g, x + 2, y + 4, WHT); P(g, x + 5, y + 3, WHT); }
-        else if (h % 11 === 4) { R(g, x + 3, y + 1, 2, 6, rf[2]); }
+      const up = !same(tx, ty - 1), dn = at(tx, ty + 1) !== 3, dn2 = !dn && !same(tx, ty + 1), lf = !same(tx - 1, ty), rt = !same(tx + 1, ty);
+      /* roof furniture: sparse, chunky, shaded */
+      if (!up && !lf && !rt && !dn && !dn2 && same(tx, ty + 2)) {
+        if (h % 19 === 0) { R(g, x + 2, y + 3, 5, 4, TD_SHADE); R(g, x + 1, y + 2, 5, 4, rf[1]); R(g, x + 1, y + 2, 5, 1, rf[2]); R(g, x + 2, y + 4, 3, 1, rf[0]); }
+        else if (h % 29 === 7) { R(g, x + 2, y + 2, 5, 5, TD_SHADE); D(g, x + 3, y + 3, 2, rf[1]); P(g, x + 2, y + 2, rf[2]); }
       }
-      if (up) R(g, x, y, 8, 1, rf[2]); if (lf) R(g, x, y, 1, 8, rf[2]); if (rt) R(g, x + 7, y, 1, 8, rf[1]);
+      /* parapet: lit top/left lip, inner shadow, dark right/bottom lip */
+      if (up) { R(g, x, y, 8, 1, rf[2]); R(g, x, y + 1, 8, 1, rf[1]); }
+      if (lf) { R(g, x, y, 1, 8, rf[2]); R(g, x + 1, y + (up ? 1 : 0), 1, up ? 7 : 8, rf[1]); }
+      if (rt) R(g, x + 7, y, 1, 8, rf[1]);
+      if (dn2) R(g, x, y + 7, 8, 1, rf[1]);
       if (dn) {
-        R(g, x, y + 4, 8, 1, rf[1]); R(g, x, y + 5, 8, 3, th.bld.wall); R(g, x, y + 7, 8, 1, th.bld.wallDark);
-        const lit = (hash2(tx, ty + 99) % 3) === 0;
-        R(g, x + 1, y + 5, 2, 2, lit ? th.bld.winLit : th.bld.win); R(g, x + 5, y + 5, 2, 2, ((hash2(tx + 7, ty) % 3) === 0) ? th.bld.winLit : th.bld.win);
-        if (h % 9 === 0) { R(g, x + 3, y + 5, 2, 3, BRN); }
+        R(g, x, y + 3, 8, 1, rf[1]); R(g, x, y + 4, 8, 4, th.bld.wall); R(g, x, y + 7, 8, 1, th.bld.wallDark);
+        if (lf) R(g, x, y + 4, 1, 4, th.bld.wallDark);
+        const lit = (hash2(tx, ty + 99) % 3) === 0, lit2 = (hash2(tx + 7, ty) % 3) === 0;
+        R(g, x + 1, y + 5, 2, 2, lit ? th.bld.winLit : th.bld.win); R(g, x + 5, y + 5, 2, 2, lit2 ? th.bld.winLit : th.bld.win);
+        if (h % 7 === 0) R(g, x + 3, y + 5, 2, 3, th.bld.wallDark);
       }
       if (th.bld.edge != null) {
         const ec = th.bld.edgeCols[d % th.bld.edgeCols.length];
-        if (up) R(g, x, y, 8, 1, ec); if (lf) R(g, x, y, 1, 8, ec); if (rt) R(g, x + 7, y, 1, 8, ec); if (dn) R(g, x, y + 7, 8, 1, ec);
+        if (up) R(g, x, y, 8, 1, ec); if (lf) R(g, x, y, 1, dn ? 4 : 8, ec); if (rt) R(g, x + 7, y, 1, dn ? 4 : 8, ec); if (dn) R(g, x, y + 3, 8, 1, ec);
       }
     } else if (t === 4) {
       R(g, x, y, 8, 8, th.water[0]);
-      if ((h & 7) < 3) R(g, x + (h >>> 3 & 3), y + (h >>> 5 & 7), 3, 1, th.water[1]);
-      if ((h >>> 9 & 7) === 0) R(g, x + 1, y + 5, 2, 1, th.water[1]);
-      if (at(tx, ty - 1) !== 4) R(g, x, y, 8, 1, th.water[2]); if (at(tx, ty + 1) !== 4) R(g, x, y + 7, 8, 1, th.water[2]);
-      if (at(tx - 1, ty) !== 4) R(g, x, y, 1, 8, th.water[2]); if (at(tx + 1, ty) !== 4) R(g, x + 7, y, 1, 8, th.water[2]);
+      if ((h & 15) < 3) R(g, x + (h >>> 4 & 3), y + 2 + (h >>> 6 & 3), 3, 1, th.water[1]);
+      const wu = at(tx, ty - 1) !== 4, wl = at(tx - 1, ty) !== 4;
+      if (wu) { R(g, x, y, 8, 1, th.water[2]); g.fillStyle = 'rgba(0,0,0,0.25)'; g.fillRect(x, y + 1, 8, 2); }
+      if (wl) { R(g, x, y, 1, 8, th.water[2]); g.fillStyle = 'rgba(0,0,0,0.25)'; g.fillRect(x + 1, y + (wu ? 3 : 0), 2, wu ? 5 : 8); }
+      if (at(tx, ty + 1) !== 4) R(g, x, y + 7, 8, 1, th.water[2]); if (at(tx + 1, ty) !== 4) R(g, x + 7, y, 1, 8, th.water[2]);
     } else if (t === 6) {
       const w = th.wall;
       R(g, x, y, 8, 8, w[0]);
@@ -319,11 +364,22 @@ function tdBakeMap(m, th) {
       if (at(tx - 1, ty) !== 6) R(g, x, y, 1, 8, BLK); if (at(tx + 1, ty) !== 6) R(g, x + 7, y, 1, 8, BLK);
     }
   }
+  /* cast shadows (light from the north-west): buildings shade the ground to their east and south-east */
+  g.fillStyle = TD_SHADE;
+  for (let ty = 0; ty < m.h; ty++) for (let tx = 0; tx < m.w; tx++) {
+    const t = m.t[ty * m.w + tx]; if (t === 3 || t === 6) continue;
+    const x = tx * 8, y = ty * 8, L_ = at(tx - 1, ty) === 3, U = at(tx, ty - 1) === 3, UL = at(tx - 1, ty - 1) === 3;
+    if (L_) g.fillRect(x, y + (U ? 0 : (UL ? 0 : 3)), 4, U || UL ? 8 : 5);
+    if (U) g.fillRect(x + (L_ ? 4 : 0), y, L_ ? 4 : 8, 2);
+    else if (UL && !L_) g.fillRect(x, y, 4, 2);
+  }
   for (const dc of m.decor) {
     const spr = tdSpr(dc.type, dc.cols, 0); tdDrawSpr(g, spr, dc.a, dc.x, dc.y, 0);
   }
   return cv;
 }
+/* knock the whole backdrop back a notch (lower contrast) so the action reads on top */
+function tdDim(cv, a, c) { if (!a) return; const g = cv.getContext('2d'); g.fillStyle = c || 'rgba(14,12,30,' + a + ')'; g.fillRect(0, 0, cv.width, cv.height); }
 
 /* ---- cones & little props shared ---- */
 function tdCone(g, x, y, k, rot) {
@@ -355,4 +411,4 @@ function tdControls(skin) {
   return { inp: inp, buttons: buttons, press: id => { if (map[id]) inp[map[id]] = 1; }, release: id => { if (map[id]) inp[map[id]] = 0; } };
 }
 /* dark control deck behind the buttons */
-function tdDeck(g) { R(g, 0, TD_VIEW_H - 1, VW, VH - TD_VIEW_H + 1, BLK); R(g, 0, TD_VIEW_H, VW, 1, NAVY); }
+function tdDeck(g) { R(g, 0, TD_VIEW_H - 1, VW, VH - TD_VIEW_H + 1, BLK); R(g, 0, TD_VIEW_H - 1, VW, 1, DGR); R(g, 0, TD_VIEW_H - 3, VW, 2, 'rgba(0,0,0,0.35)'); }

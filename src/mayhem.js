@@ -35,16 +35,18 @@ const MYTH = [
 ];
 
 /* ---- little prop sprites ---- */
+const MY_SH = 'rgba(6,4,18,0.35)';
 const MY_PD = {
-  hydrant(g, x, y) { R(g, x - 3, y - 4, 7, 8, BLK); R(g, x - 2, y - 3, 5, 6, RED); R(g, x - 3, y - 1, 7, 2, RED); R(g, x - 2, y - 3, 5, 1, PINK); P(g, x, y, YEL); R(g, x - 1, y - 5, 3, 1, BLK); },
-  trash(g, x, y) { R(g, x - 3, y - 3, 7, 7, BLK); R(g, x - 2, y - 2, 5, 5, DGR); R(g, x - 2, y - 2, 5, 1, LGR); R(g, x - 1, y, 3, 1, BLK); },
-  mailbox(g, x, y) { R(g, x - 3, y - 3, 7, 7, BLK); R(g, x - 2, y - 2, 5, 5, SKY); R(g, x - 2, y - 2, 5, 1, WHT); R(g, x - 1, y, 3, 1, NAVY); },
-  bench(g, x, y) { R(g, x - 6, y - 3, 13, 7, BLK); R(g, x - 5, y - 2, 11, 2, BRN); R(g, x - 5, y + 1, 11, 2, ORG); R(g, x - 5, y - 2, 11, 1, PEACH); },
-  fruit(g, x, y) { R(g, x - 6, y - 4, 13, 9, BLK); R(g, x - 5, y - 3, 11, 3, WHT); for (let i = 0; i < 11; i += 4) R(g, x - 5 + i, y - 3, 2, 3, RED); R(g, x - 5, y, 11, 4, BRN); P(g, x - 3, y + 1, RED); P(g, x - 1, y + 2, ORG); P(g, x + 1, y + 1, YEL); P(g, x + 3, y + 2, LIME); P(g, x + 4, y + 1, RED); },
-  lamp(g, x, y) { R(g, x - 2, y - 2, 5, 5, BLK); R(g, x - 1, y - 1, 3, 3, DGR); P(g, x, y, YEL); },
-  barrel(g, x, y) { D(g, x, y, 4, BLK); D(g, x, y, 3, RED); R(g, x - 3, y - 1, 7, 2, YEL); R(g, x - 3, y - 1, 7, 1, BLK); P(g, x - 1, y - 2, PINK); },
+  /* street furniture: small, shaded, low-key (no heavy outlines) so it reads as scenery; barrels and TNT stay loud */
+  hydrant(g, x, y) { R(g, x - 1, y - 1, 5, 5, MY_SH); R(g, x - 2, y - 2, 5, 5, PLUM); R(g, x - 2, y - 3, 5, 5, RED); R(g, x - 1, y - 3, 3, 1, PINK); P(g, x, y - 1, YEL); },
+  trash(g, x, y) { R(g, x - 1, y - 1, 6, 6, MY_SH); R(g, x - 3, y - 3, 6, 6, BLK); R(g, x - 2, y - 2, 4, 4, DGR); R(g, x - 2, y - 2, 4, 1, LGR); },
+  mailbox(g, x, y) { R(g, x - 1, y - 1, 6, 6, MY_SH); R(g, x - 3, y - 3, 6, 6, NAVY); R(g, x - 2, y - 3, 4, 2, SKY); R(g, x - 1, y, 2, 1, WHT); },
+  bench(g, x, y) { R(g, x - 4, y - 1, 11, 4, MY_SH); R(g, x - 5, y - 2, 11, 4, BRN); R(g, x - 5, y - 2, 11, 1, ORG); R(g, x - 5, y, 11, 1, BLK); R(g, x - 5, y - 2, 1, 4, BLK); R(g, x + 5, y - 2, 1, 4, BLK); },
+  fruit(g, x, y) { R(g, x - 4, y - 2, 11, 8, MY_SH); R(g, x - 5, y - 3, 11, 8, BRN); for (let i = 0; i < 11; i++) R(g, x - 5 + i, y - 4, 1, 4, (i >> 1) & 1 ? WHT : RED); R(g, x - 5, y, 11, 1, PLUM); P(g, x - 3, y + 2, RED); P(g, x - 1, y + 3, ORG); P(g, x + 1, y + 2, YEL); P(g, x + 3, y + 3, LIME); },
+  lamp(g, x, y) { R(g, x, y, 3, 3, MY_SH); R(g, x - 1, y - 1, 3, 3, BLK); P(g, x, y, LGR); },
+  barrel(g, x, y) { D(g, x + 1, y + 1, 4, MY_SH); D(g, x, y, 4, BLK); D(g, x, y, 3, RED); R(g, x - 3, y - 1, 7, 2, YEL); R(g, x - 3, y, 7, 1, BLK); P(g, x - 1, y - 3, PINK); P(g, x - 2, y - 2, PINK); },
   cone(g, x, y) { tdCone(g, x, y, 0, 0); },
-  bomb(g, x, y) { R(g, x - 6, y - 6, 13, 13, BLK); R(g, x - 5, y - 5, 11, 11, RED); R(g, x - 5, y - 5, 11, 2, PINK); R(g, x - 5, y + 4, 11, 1, PLUM); R(g, x - 4, y - 2, 9, 1, YEL); R(g, x - 4, y + 2, 9, 1, YEL); D(g, x, y, 3, BLK); P(g, x - 1, y - 1, WHT); P(g, x, y - 4, ORG); P(g, x + 1, y - 5, YEL); }
+  bomb(g, x, y) { /* TNT crate */ R(g, x - 4, y - 4, 12, 12, MY_SH); R(g, x - 6, y - 6, 12, 12, BLK); R(g, x - 5, y - 5, 10, 10, BRN); R(g, x - 5, y - 5, 10, 1, ORG); R(g, x - 5, y - 5, 1, 10, ORG); R(g, x - 5, y - 2, 10, 4, RED); R(g, x - 5, y - 2, 10, 1, PINK); R(g, x - 4, y - 1, 1, 2, WHT); R(g, x - 3, y - 1, 1, 1, WHT); R(g, x - 1, y - 1, 1, 2, WHT); R(g, x, y - 1, 1, 1, WHT); R(g, x + 1, y - 1, 1, 2, WHT); R(g, x + 2, y - 1, 1, 2, WHT); R(g, x + 3, y - 1, 1, 1, WHT); P(g, x + 4, y - 7, YEL); P(g, x + 5, y - 8, ORG); R(g, x + 3, y - 7, 1, 2, LGR); }
 };
 const MY_PSPR = {};
 function myPropSpr(k) {
@@ -245,6 +247,7 @@ function myBakeCity(W, TH) {
     else if (TH.tree === 'pine') { D(g, x + 2, y + 2, 5, 'rgba(0,0,0,0.2)'); D(g, x, y, 6, BLK); D(g, x, y, 5, GRN); D(g, x, y, 3, LIME); R(g, x - 2, y - 3, 3, 2, WHT); R(g, x, y - 1, 3, 2, WHT); R(g, x - 3, y + 1, 3, 2, WHT); P(g, x, y, WHT); }
     else { D(g, x + 2, y + 2, 5, 'rgba(0,0,0,0.25)'); D(g, x, y, 6, BLK); D(g, x, y, 5, GRN); D(g, x - 1, y - 1, 3, LIME); P(g, x + 2, y + 2, BLK); P(g, x - 3, y + 1, BLK); if (TH.n === 'NEON') { P(g, x + 3, y - 2, PINK); P(g, x - 2, y + 3, SKY); } }
   }
+  tdDim(cv, TH.beams ? 0.08 : TH.snow ? 0.22 : 0.16);
   return cv;
 }
 
@@ -258,7 +261,7 @@ function makeMayhem(seed, skin) {
   const bake = myBakeCity(W, TH);
   const TIME = 60;
   /* ---- entities ---- */
-  const car = tdCarNew('sedan', myNode(3) + 24, myNode(4) + 10, 0, { m: skin.main, d: skin.dark, l: skin.light, o: WHT });
+  const car = tdCarNew('sedan', myNode(3) + 24, myNode(4) + 10, 0, { m: skin.main, d: skin.dark, l: skin.light, o: WHT, s: skin.light === WHT ? NAVY : WHT });
   car.in = ctl.inp; car.mass = 1.4;
   const cam = tdCamNew(); tdCamTarget(cam, car, map, true);
   const TCOLS = [{ m: RED, d: PLUM, l: PINK }, { m: SKY, d: NAVY, l: WHT }, { m: LIME, d: GRN, l: WHT }, { m: WHT, d: LGR, l: WHT }, { m: PINK, d: PLUM, l: WHT }, { m: DGR, d: BLK, l: LGR }, { m: ORG, d: BRN, l: YEL }, { m: LAV, d: PLUM, l: WHT }];
@@ -851,17 +854,17 @@ function makeMayhem(seed, skin) {
     }
     for (const rp of ramps) { const x = rp.x + ox, y = rp.y + oy - 12 - Math.sin(t * 5) * 1.5; if (!onScr(x, y, 20)) continue; myStar(g, x, y, 5, (Math.floor(t * 4) & 1) ? YEL : ORG, BLK, t * 2, 0.5); }
     // gold coin trails
-    for (const q of gold) { const x = Math.round(q.x + ox), y = Math.round(q.y + oy - 3 - Math.sin(t * 6 + q.ph) * 1.5); if (!onScr(x, y, 8)) continue; R(g, x - 3, y - 3, 7, 7, BLK); R(g, x - 2, y - 3, 5, 7, YEL); R(g, x - 3, y - 2, 7, 5, YEL); const sh = Math.floor(t * 8 + q.ph * 3) % 6; R(g, x - 1, y - 2, 1, 4, sh < 2 ? WHT : ORG); if (sh === 0) P(g, x + 2, y - 3, WHT); }
+    for (const q of gold) { const x = Math.round(q.x + ox), by = Math.round(q.y + oy), y = Math.round(by - 3 - Math.sin(t * 6 + q.ph) * 1.5); if (!onScr(x, y, 8)) continue; R(g, x - 1, by, 4, 2, MY_SH); const sh = Math.floor(t * 8 + q.ph * 3) % 6, w = sh === 3 ? 1 : sh === 2 || sh === 4 ? 3 : 5; R(g, x - (w >> 1), y - 2, w, 5, ORG); R(g, x - (w >> 1), y - 2, Math.max(1, w - 1), 4, YEL); if (w > 2) P(g, x - (w >> 1) + 1, y - 1, WHT); }
     // spike strips
     for (const s of strips) { const x = s.x + ox, y = s.y + oy; if (!onScr(x, y, 20)) continue; const w = 24, h = 3; const bx = s.vert ? x - w / 2 : x - h / 2, by = s.vert ? y - h / 2 : y - w / 2, ww = s.vert ? w : h, hh = s.vert ? h : w; R(g, bx - 1, by - 1, ww + 2, hh + 2, BLK); R(g, bx, by, ww, hh, DGR); for (let i = 0; i < w; i += 3) { if (s.vert) { P(g, bx + i, by, WHT); P(g, bx + i + 1, by + 2, LGR); } else { P(g, bx, by + i, WHT); P(g, bx + 2, by + i + 1, LGR); } } if (!s.hit && (Math.floor(t * 4) & 1)) T(g, '!', x, y - 11, RED, { al: 'c', ol: BLK }); }
     // props
     for (const p of props) { if (!p.alive) continue; const x = Math.round(p.x + ox), y = Math.round(p.y + oy); if (!onScr(x, y, 10)) continue; if (p.k === 'cone') tdCone(g, x, y, 0, 0); else g.drawImage(myPropSpr(p.k), x - 8, y - 8); }
-    for (const p of props) { if (!p.alive || p.k !== 'bomb') continue; const x = Math.round(p.x + ox), y = Math.round(p.y + oy); if (!onScr(x, y, 14)) continue; if (Math.floor(t * 4 + x * 0.1) & 1) { R(g, x - 7, y - 7, 15, 1, YEL); R(g, x - 7, y + 7, 15, 1, YEL); R(g, x - 7, y - 7, 1, 15, YEL); R(g, x + 7, y - 7, 1, 15, YEL); }  }
+    for (const p of props) { if (!p.alive || p.k !== 'bomb') continue; const x = Math.round(p.x + ox), y = Math.round(p.y + oy); if (!onScr(x, y, 14)) continue; if (Math.floor(t * 6 + x * 0.1) & 1) { P(g, x + 5, y - 9, WHT); P(g, x + 6, y - 8, YEL); P(g, x + 4, y - 9, YEL); } }
     for (const q of picks) {
       const x = Math.round(q.x + ox), bob = Math.sin(t * 4 + q.ph) * 2.5, y = Math.round(q.y + oy - 9 + bob); if (!onScr(x, y, 20)) continue;
       const P0 = PK[q.k], pulse = 0.55 + 0.45 * Math.sin(t * 7 + q.ph);
       R(g, x - 5, Math.round(q.y + oy) + 2, 11, 3, 'rgba(0,0,0,0.3)');
-      D(g, x, y, 12 + pulse * 3, 'rgba(255,241,232,' + (0.14 + pulse * 0.1) + ')'); D(g, x, y, 9, BLK); D(g, x, y, 8, P0.c); D(g, x, y, 6, BLK); D(g, x, y, 5, (Math.floor(t * 6 + q.ph) & 1) ? P0.c : WHT);
+      D(g, x, y, 11 + pulse * 2, 'rgba(255,241,232,' + (0.1 + pulse * 0.08) + ')'); D(g, x, y, 9, BLK); D(g, x, y, 8, P0.c); D(g, x, y, 6, BLK); D(g, x, y, 5, (Math.floor(t * 6 + q.ph) & 1) ? P0.c : WHT);
       T(g, P0.t, x, y - 3, BLK, { al: 'c' });
       for (let k = 0; k < 3; k++) { const an = t * 3 + q.ph + k * 2.09; P(g, x + Math.cos(an) * 12, y + Math.sin(an) * 12, WHT); }
     }
@@ -920,12 +923,8 @@ function makeMayhem(seed, skin) {
     }
     /* ---- the player's car: always on top, outlined, with a pulsing ring underneath and an arrow above ---- */
     {
-      const x = car.x + ox, y = car.y + oy, pul = 0.5 + 0.5 * Math.sin(t * 7), rr0 = 12 + pul * 2, rc2 = (Math.floor(t * 6) & 1) ? WHT : YEL;
-      D(g, x, y + 1, 10, 'rgba(0,0,0,0.4)');
-      for (let i = 0; i < 28; i++) { const an = i / 28 * 6.283 + t * 1.2, px = x + Math.cos(an) * rr0, py = y + 1 + Math.sin(an) * rr0 * 0.85; R(g, px - 1, py - 1, 3, 3, BLK); }
-      for (let i = 0; i < 28; i++) { const an = i / 28 * 6.283 + t * 1.2; R(g, x + Math.cos(an) * rr0, y + 1 + Math.sin(an) * rr0 * 0.85, 2, 2, i % 4 < 2 ? rc2 : skin.light); }
+      tdHeroMark(g, car.x + ox, car.y + oy, car.z, t, YEL);
       if (invuln <= 0 || (Math.floor(t * 12) & 1)) drawCarAt(g, car, ox, oy, 0);
-      const ay = y - 21 - car.z * 0.6 - Math.abs(Math.sin(t * 5)) * 2.5, tri = [[x - 6, ay - 6], [x + 6, ay - 6], [x, ay + 2]]; PG(g, tri, BLK, 1.5); PG(g, tri, (Math.floor(t * 6) & 1) ? YEL : WHT);
     }
     pops.forEach(q => { const k = q.t; T(g, q.s, clamp(q.x + ox, 20, vw - 20), q.y + oy - k * 12, q.c, { al: 'c', ol: BLK, s: 1 }); });
     if (TH.snow) flakes.forEach(f => R(g, f[0] * zm, f[1] * zm, 1 + (f[2] > 15 ? 1 : 0), 1 + (f[2] > 15 ? 1 : 0), WHT));
@@ -942,42 +941,40 @@ function makeMayhem(seed, skin) {
     if (flash > 0) R(g, 0, 25, VW, TD_VIEW_H - 25, 'rgba(255,241,232,' + (flash * 0.25) + ')');
     if (rage > 0) { const rc = (Math.floor(t * 10) & 1) ? RED : ORG; R(g, 0, 25, VW, 2, rc); R(g, 0, TD_VIEW_H - 2, VW, 2, rc); R(g, 0, 25, 2, TD_VIEW_H - 25, rc); R(g, VW - 2, 25, 2, TD_VIEW_H - 25, rc); }
     if (nitro > 0) { for (let i = 0; i < 6; i++) { const yy = 40 + ((t * 300 + i * 41) % 200); R(g, 4 + (i * 37) % 180, yy, 1, 10, 'rgba(255,241,232,0.35)'); } }
-    // HUD
-    R(g, 0, 0, VW, 25, BLK); R(g, 0, 24, VW, 1, NAVY);
+    // HUD: top bar = score / stars+heat / timer, row 2 = multiplier / car health
+    R(g, 0, 0, VW, 24, BLK); R(g, 0, 24, VW, 1, DGR); R(g, 0, 25, VW, 1, 'rgba(0,0,0,0.4)');
     T(g, String(Math.round(me.score)), 4, 3, YEL, { sh: PLUM });
     const m = Math.floor(Math.max(0, time) / 60), s = Math.floor(Math.max(0, time) % 60);
-    T(g, m + ':' + (s < 10 ? '0' : '') + s, VW - 19, 3, time < 10 ? ((Math.floor(t * 4) & 1) ? RED : WHT) : WHT, { al: 'r' });
-    // multiplier + combo bar
-    T(g, 'x' + (mult * pm), 4, 13, mult * pm > 1 ? ORG : LGR, { sh: BLK });
-    { // big combo counter + multiplier meter
-      const tm = mult * pm, cc = tm >= 12 ? ((Math.floor(t * 10) & 1) ? WHT : RED) : tm >= 6 ? ORG : tm > 1 ? YEL : LGR, big = combo > 0 || pm > 1, sc = tm >= 10 ? 3 : 3;
-      if (big) {
-        const lab = 'x' + tm, pul = comboT > 0 && comboT > 4.2 ? 1 : 0;
-        T(g, lab, 4, 28, cc, { s: sc, sh: BLK });
-        T(g, 'COMBO ' + Math.floor(combo), 4, 52, WHT, { ol: BLK });
-        R(g, 4, 62, 50, 6, BLK); R(g, 5, 63, 48, 4, DGR); const fr = comboT > 0 ? clamp(comboT / 4.5, 0, 1) : 0; R(g, 5, 63, Math.round(48 * fr), 4, cc);
-        const step = combo % 3 / 3; R(g, 5, 69, 48, 2, BLK); R(g, 5, 69, Math.round(48 * (mult >= 8 ? 1 : step)), 2, WHT);
+    T(g, m + ':' + (s < 10 ? '0' : '') + s, VW - 19, 3, time < 10 ? ((Math.floor(t * 4) & 1) ? RED : WHT) : WHT, { al: 'r', sh: DGR });
+    T(g, 'x' + (mult * pm), 4, 14, mult * pm > 1 ? ORG : DGR, { sh: BLK });
+    { // combo panel: only while a multiplier is live
+      const tm = mult * pm, cc = tm >= 12 ? ((Math.floor(t * 10) & 1) ? WHT : RED) : tm >= 6 ? ORG : YEL;
+      if (tm > 1 && combo > 0) {
+        R(g, 2, 28, 64, 26, 'rgba(10,8,24,0.72)'); R(g, 2, 28, 64, 1, cc);
+        T(g, 'x' + tm, 5, 31, cc, { s: 2, sh: BLK }); T(g, String(Math.floor(combo)), 63, 31, WHT, { al: 'r' }); T(g, 'HITS', 63, 39, LGR, { al: 'r' });
+        const fr = comboT > 0 ? clamp(comboT / 4.5, 0, 1) : 0; R(g, 5, 47, 58, 3, BLK); R(g, 5, 47, Math.round(58 * fr), 3, cc);
+        R(g, 5, 51, Math.round(58 * (mult >= 8 ? 1 : combo % 3 / 3)), 1, WHT);
       }
     }
     { // power-up timers
-      let yy = 29; const bar = (lab, v, c) => { const w = 54; R(g, VW - w - 5, yy, w + 2, 11, BLK); R(g, VW - w - 4, yy + 1, w, 9, DGR); R(g, VW - w - 4, yy + 1, Math.round(w * clamp(v, 0, 1)), 9, c); T(g, lab, VW - w - 2, yy + 2, WHT, { ol: BLK }); yy += 13; };
+      let yy = 29; const bar = (lab, v, c) => { const w = 54; R(g, VW - w - 5, yy, w + 2, 11, 'rgba(10,8,24,0.8)'); R(g, VW - w - 4, yy + 1, w, 9, DGR); R(g, VW - w - 4, yy + 1, Math.round(w * clamp(v, 0, 1)), 9, c); T(g, lab, VW - w - 2, yy + 2, WHT, { ol: BLK }); yy += 13; };
       if (rage > 0) bar('RAMPAGE', rage / 9, (Math.floor(t * 10) & 1) ? RED : ORG);
       if (nitro > 0) bar('TURBO', nitro / 5, LIME);
       if (pm > 1) bar('x' + pm + ' PTS', pmT / (pm === 2 ? 16 : 12), pm === 3 ? PINK : SKY);
     }
     // stars
     for (let i = 0; i < 5; i++) {
-      const on = i < stars, cx = 96 - 24 + i * 12, cy = 13;
+      const on = i < stars, cx = 96 - 26 + i * 13, cy = 10;
       const fl = on && starFlash > 0 && (Math.floor(t * 12) & 1);
-      myStar(g, cx, cy, 5.2, on ? (fl ? WHT : (stars >= 4 && (Math.floor(t * 6) & 1) ? RED : YEL)) : DGR, on ? BLK : BLK, null, 0.5);
+      myStar(g, cx, cy, 5.6, on ? (fl ? WHT : (stars >= 4 && (Math.floor(t * 6) & 1) ? RED : YEL)) : '#2a2733', on ? PLUM : BLK, null, 0.5);
     }
     { const bw = 52, f0 = dmg / 100, cc = dmg > 75 ? ((Math.floor(t * 8) & 1) ? RED : ORG) : dmg > 45 ? YEL : LIME;
-      R(g, 134, 12, bw + 2, 9, BLK); R(g, 135, 13, bw, 7, DGR); R(g, 135, 13, Math.round(bw * (1 - f0)), 7, dmgHit > 0 ? WHT : cc); T(g, 'CAR', 137, 14, WHT, { ol: BLK }); }
-    if (bustT > 0.2) { R(g, 70, 21, 52, 3, BLK); R(g, 71, 21, Math.round(50 * clamp(bustT / 3.4, 0, 1)), 2, RED); T(g, 'BUSTING', 96, 27, RED, { al: 'c', ol: BLK }); }
-    else if (stars > 0) { const nxt = stars < 5 ? MY_STARS[stars] : 430, prv = MY_STARS[stars - 1]; R(g, 70, 21, 52, 3, BLK); R(g, 71, 21, Math.round(50 * clamp((heat - prv) / (nxt - prv), 0, 1)), 2, stars >= 4 ? RED : ORG); if (evadeT > 4) T(g, 'EVADING...', 96, 27, LIME, { al: 'c', ol: BLK }); }
-    else { R(g, 70, 21, 52, 3, BLK); R(g, 71, 21, Math.round(50 * clamp(heat / MY_STARS[0], 0, 1)), 2, DGR); }
+      R(g, 134, 13, bw + 2, 8, DGR); R(g, 135, 14, bw, 6, BLK); R(g, 135, 14, Math.round(bw * (1 - f0)), 6, dmgHit > 0 ? WHT : cc); R(g, 135, 14, Math.round(bw * (1 - f0)), 1, 'rgba(255,255,255,0.35)'); T(g, 'CAR', 137, 14, WHT, { ol: BLK }); }
+    if (bustT > 0.2) { R(g, 70, 18, 52, 4, DGR); R(g, 71, 19, 50, 2, BLK); R(g, 71, 19, Math.round(50 * clamp(bustT / 3.4, 0, 1)), 2, RED); T(g, 'BUSTING', 96, 27, RED, { al: 'c', ol: BLK }); }
+    else if (stars > 0) { const nxt = stars < 5 ? MY_STARS[stars] : 430, prv = MY_STARS[stars - 1]; R(g, 70, 18, 52, 4, DGR); R(g, 71, 19, 50, 2, BLK); R(g, 71, 19, Math.round(50 * clamp((heat - prv) / (nxt - prv), 0, 1)), 2, stars >= 4 ? RED : ORG); if (evadeT > 4) T(g, 'EVADING...', 96, 27, LIME, { al: 'c', ol: BLK }); }
+    else { R(g, 70, 18, 52, 4, DGR); R(g, 71, 19, 50, 2, BLK); R(g, 71, 19, Math.round(50 * clamp(heat / MY_STARS[0], 0, 1)), 2, LGR); }
     if (driftT > 0.5) T(g, 'DRIFT ' + driftT.toFixed(1), 96, 34, SKY, { al: 'c', ol: BLK });
-    if (bannerT < 1.3 && banner) { const bw = tw(banner, 1) + 8; R(g, 96 - bw / 2, 44, bw, 11, 'rgba(14,12,26,0.6)'); T(g, banner, 96, 46, bannerC, { al: 'c', s: 1, ol: BLK }); }
+    if (bannerT < 1.3 && banner) { const bw = tw(banner, 1) + 8; const by = combo > 0 && mult * pm > 1 ? 58 : 44; R(g, 96 - bw / 2, by, bw, 11, 'rgba(14,12,26,0.7)'); T(g, banner, 96, by + 2, bannerC, { al: 'c', s: 1, ol: BLK }); }
     if (fiveShown > 0) {
       const k = Math.floor(t * 10) & 1;
       R(g, 56, 28, 80, 66, 'rgba(14,12,26,0.55)');
@@ -1004,15 +1001,34 @@ const DEF_MAYHEM = {
   name: 'MAYHEM', short: 'Mayhem', series: { name: 'CHAOS', icon: 'siren' }, tag: 'CAUSE CHAOS', color: RED, make: makeMayhem,
   how: ['>CAUSE CHAOS', 'SMASH, BONK, BLOW IT UP.', 'COMBOS RAISE YOUR x.', '>BOOSTERS', 'x2 x3 POINTS, NITRO,', 'RAMPAGE = EVERYTHING', 'EXPLODES. TNT CRATES,', 'COIN TRAILS, BIG AIR.', '>WANTED', 'COPS RAM, PIT AND BOX', 'YOU IN. 5 STARS =', '+5000 BADGE OF HONOR.', '>BUSTED IF BOXED 3S.'],
   art(g, x, y, w, h) {
-    R(g, x, y, w, h, DGR); R(g, x, y + 24, w, 18, BLK); for (let i = 0; i < 8; i++) R(g, x + 3 + i * 11, y + 32, 6, 2, YEL);
-    R(g, x, y, w, 12, LGR); for (let i = 0; i < 6; i++) { R(g, x + i * 15, y, 12, 12, [BRN, SKY, PLUM, ORG, GRN, LAV][i]); R(g, x + i * 15, y + 9, 12, 3, PEACH); R(g, x + i * 15 + 2, y + 9, 2, 2, YEL); R(g, x + i * 15 + 7, y + 9, 2, 2, NAVY); }
-    R(g, x, y + 42, w, h - 42, LGR); R(g, x, y + 42, w, 1, WHT);
-    D(g, x + 34, y + 30, 11, 'rgba(255,0,77,0.9)'); D(g, x + 34, y + 30, 8, ORG); D(g, x + 34, y + 30, 5, YEL); D(g, x + 34, y + 30, 2, WHT);
-    for (let a = 0; a < 8; a++) { const an = a / 8 * 6.283; L(g, x + 34 + Math.cos(an) * 11, y + 30 + Math.sin(an) * 11, x + 34 + Math.cos(an) * 15, y + 30 + Math.sin(an) * 15, a & 1 ? YEL : ORG, 1); }
-    const sp = tdSpr('sedan', { m: ORG, d: BRN, l: YEL }, 0); tdDrawSpr(g, sp, -0.4, x + 54, y + 34, 0);
-    const cp = tdSpr('cop', { m: WHT, d: BLK, l: BLK }, 0); tdDrawSpr(g, cp, 0.3, x + 14, y + 36, 0); tdDrawSpr(g, cp, 0.5, x + 70, y + 24, 0);
-    for (let i = 0; i < 5; i++) myStar(g, x + 12 + i * 11, y + 49, 4.5, YEL, BLK, null, 0.5);
-    const ps = myPedSpr(RED, PEACH, 3); g.drawImage(ps, x + 50, y + 8); myStar(g, x + 58, y + 6, 4, YEL, BLK, 0.3, 0.5);
-    T(g, 'BONK', x + 66, y + 4, WHT, { al: 'c', ol: BLK });
+    g.save(); g.beginPath(); g.rect(x, y, w, h); g.clip();
+    /* overhead crossroads at night, GTA-style */
+    R(g, x, y, w, h, '#24202e'); R(g, x, y + 22, w, 18, DGR); R(g, x + 52, y, 16, h, DGR);
+    R(g, x, y + 21, 52, 1, LGR); R(g, x, y + 40, 52, 1, LGR); R(g, x + 68, y + 21, 16, 1, LGR); R(g, x + 68, y + 40, 16, 1, LGR); R(g, x + 51, y, 1, 21, LGR); R(g, x + 68, y, 1, 21, LGR); R(g, x + 51, y + 41, 1, 15, LGR); R(g, x + 68, y + 41, 1, 15, LGR);
+    for (let i = 0; i < 6; i++) R(g, x + 2 + i * 9, y + 31, 5, 1, YEL); for (let i = 0; i < 4; i++) R(g, x + 60, y + 2 + i * 7, 1, 4, YEL);
+    /* rooftops with parapets */
+    const roof = (rx, ry, rw, rh, c0, c1, c2) => { R(g, rx + 2, ry + 2, rw, rh, 'rgba(0,0,0,0.45)'); R(g, rx, ry, rw, rh, c0); R(g, rx, ry, rw, 1, c2); R(g, rx, ry, 1, rh, c2); R(g, rx + rw - 1, ry, 1, rh, c1); R(g, rx, ry + rh - 1, rw, 1, c1); };
+    roof(x + 1, y + 1, 22, 17, PLUM, BLK, PINK); roof(x + 26, y + 3, 22, 15, NAVY, BLK, SKY); roof(x + 72, y + 2, 14, 16, BRN, BLK, ORG); roof(x + 72, y + 44, 14, 14, NAVY, BLK, LAV); roof(x + 1, y + 44, 46, 14, '#3a2a3a', BLK, LAV);
+    R(g, x + 6, y + 5, 5, 3, BLK); R(g, x + 31, y + 8, 6, 4, BLK); R(g, x + 8, y + 48, 6, 3, BLK); R(g, x + 30, y + 49, 4, 4, BLK);
+    /* blood splat + skid marks */
+    for (let i = 0; i < 26; i++) { const hh = hash2(i, 41), an = (hh & 255) / 40, rr = (hh >>> 8) % 6; P(g, x + 22 + Math.cos(an) * rr, y + 35 + Math.sin(an) * rr * 0.6, i & 1 ? '#7a0020' : '#a1002f'); }
+    for (let i = 0; i < 18; i++) { P(g, x + 26 + i, y + 26 + Math.round(Math.sin(i / 5) * 2), BLK); P(g, x + 26 + i, y + 30 + Math.round(Math.sin(i / 5) * 2), BLK); }
+    /* explosion on the junction */
+    const ex = x + 62, ey = y + 30;
+    D(g, ex, ey, 14, 'rgba(255,0,77,0.55)'); D(g, ex, ey, 11, RED); D(g, ex + 1, ey - 1, 8, ORG); D(g, ex + 1, ey - 2, 5, YEL); D(g, ex + 1, ey - 2, 2, WHT);
+    for (let a = 0; a < 10; a++) { const an = a / 10 * 6.283 + 0.3; L(g, ex + Math.cos(an) * 13, ey + Math.sin(an) * 13, ex + Math.cos(an) * (16 + (a & 1) * 3), ey + Math.sin(an) * (16 + (a & 1) * 3), a & 1 ? YEL : ORG, 1); }
+    D(g, ex - 6, ey - 13, 4, DGR); D(g, ex - 2, ey - 16, 3, DGR); D(g, ex + 4, ey - 15, 3, '#3a3640');
+    /* chasing cops with light glow, flipped cop wreck, the player's car */
+    const cp = tdSpr('cop', { m: WHT, d: BLK, l: BLK }, 0), cp2 = tdSpr('cop', { m: WHT, d: BLK, l: BLK }, 1);
+    D(g, x + 10, y + 32, 7, 'rgba(41,173,255,0.3)'); tdDrawSpr(g, cp, 0.12, x + 10, y + 31, 0);
+    D(g, x + 60, y + 50, 7, 'rgba(255,0,77,0.3)'); tdDrawSpr(g, cp2, -1.45, x + 60, y + 49, 0);
+    tdDrawSpr(g, tdSpr('cop', { m: BLK, d: BLK, l: DGR }, 0), 2.4, ex + 2, ey + 1, 3);
+    tdHeroMark(g, x + 36, y + 30, 0, 0.2, YEL, false); tdDrawSpr(g, tdSpr('sedan', { m: ORG, d: BRN, l: YEL, o: WHT, s: WHT }, 0), -0.35, x + 36, y + 30, 0);
+    /* flying ped */
+    const ps = myPedSpr(SKY, PEACH, 3); g.drawImage(ps, x + 40, y + 13); P(g, x + 44, y + 23, '#a1002f'); P(g, x + 47, y + 22, '#a1002f');
+    /* wanted banner */
+    R(g, x + 45, y, 39, 11, 'rgba(0,0,0,0.75)'); R(g, x + 45, y + 11, 39, 1, RED);
+    for (let i = 0; i < 5; i++) myStar(g, x + 51 + i * 7, y + 5, 3.2, (i === 4) ? ORG : YEL, BLK, null, 0.5);
+    g.restore();
   }
 };

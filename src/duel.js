@@ -2,7 +2,7 @@
 const DU_GY = 222, DU_AH = 256;
 const DU_THEMES = [
   { n: 'BAMBOO DAY', sky: [SKY, SKY, WHT, PEACH], far: LAV, hill: LGR, ground: PEACH, gd: BRN, gl: ORG, bam: [GRN, LIME], bamd: DGR, sun: YEL, kind: 0 },
-  { n: 'MOON NIGHT', sky: [BLK, NAVY, NAVY, PLUM], far: NAVY, hill: PLUM, ground: NAVY, gd: BLK, gl: DGR, bam: [NAVY, GRN], bamd: BLK, sun: WHT, kind: 1 },
+  { n: 'MOON NIGHT', sky: [BLK, BLK, NAVY, NAVY], far: PLUM, hill: NAVY, ground: NAVY, gd: BLK, gl: DGR, bam: [NAVY, GRN], bamd: BLK, sun: WHT, kind: 1 },
   { n: 'SNOW', sky: [LGR, LGR, SKY, WHT], far: LAV, hill: LGR, ground: WHT, gd: LGR, gl: SKY, bam: [GRN, DGR], bamd: DGR, sun: PEACH, kind: 2 },
   { n: 'DOJO', sky: [BRN, BRN, BRN, BRN], far: PEACH, hill: PEACH, ground: BRN, gd: BLK, gl: ORG, bam: [BRN, ORG], bamd: BLK, sun: RED, kind: 3 }
 ];
@@ -18,6 +18,8 @@ const DU_SH = [
   { i: [9, -21, 28, -23], w: [3, -20, -14, -22], s: [11, -21, 38, -21] },
   { i: [9, -14, 26, -4], w: [3, -14, -14, -6], s: [11, -14, 38, -3] }
 ];
+/* sparse dither overlay: d=2 checker, d=4 quarter */
+function duDith(g, x, y, w, h, c, d) { fc(g, c); for (let yy = 0; yy < h; yy++) for (let xx = ((yy & 1) ? (d >> 1) : 0) + ((d === 4 && (yy & 2)) ? 1 : 0); xx < w; xx += d) g.fillRect(x + xx, y + yy, 1, 1); }
 function duLp(a, b, u) { return a.map((v, i) => v + (b[i] - v) * u); }
 
 function duBackdrop(TH, seed, fgOnly) {
@@ -44,19 +46,26 @@ function duBackdrop(TH, seed, fgOnly) {
     if (TH.kind === 2) { let xx = -10; while (xx < VW) { const w = 40 + h(xx, 3) % 30, ht = 14 + h(xx, 4) % 18; E(g, xx + w / 2, 150 - ht + 3, w / 6, 3, WHT); xx += w - 8; } }
   }
   if (TH.kind === 0 || TH.kind === 1) {
-    for (let i = 0; i < 16; i++) {
-      const bx = i * 12 + h(i, 11) % 8, far = i % 2, w = far ? 3 : 4, col = far ? TH.bam[0] : TH.bam[0], lt = TH.bam[1];
-      if (TH.kind === 1) { R(g, bx, 60 + far * 20, w, DU_GY - 60 - far * 20, far ? NAVY : BLK); R(g, bx, 60 + far * 20, 1, DU_GY - 80, far ? DGR : NAVY); }
-      else { R(g, bx, 60 + far * 20, w, DU_GY - 60 - far * 20, far ? LIME : GRN); R(g, bx, 60 + far * 20, 1, DU_GY - 80, far ? WHT : LIME); R(g, bx + w - 1, 60 + far * 20, 1, DU_GY - 80, far ? GRN : TH.bamd); }
-      for (let y = 78 + (h(i, 2) % 20); y < DU_GY; y += 24) R(g, bx - 1, y, w + 2, 1, TH.kind === 1 ? BLK : DGR);
-      for (let l = 0; l < 3; l++) { const ly = 70 + h(i, 20 + l) % 80, dx = (l & 1) ? -1 : 1; L(g, bx + 1, ly, bx + 1 + dx * 9, ly + 4, TH.kind === 1 ? GRN : (far ? LIME : GRN), 2); }
+    const day = TH.kind === 0;
+    for (let pass = 0; pass < 2; pass++) for (let i = 0; i < 12; i++) {
+      if ((i & 1) !== pass) continue;
+      const far = pass === 0, bx = i * 16 + h(i, 11) % 9 - 3, w = far ? 3 : 4, top = 18;
+      const c0 = day ? (far ? LIME : GRN) : (far ? NAVY : BLK), c1 = day ? (far ? WHT : LIME) : (far ? DGR : NAVY), cs = day ? (far ? GRN : DGR) : BLK;
+      R(g, bx, top, w, DU_GY - top, c0); R(g, bx, top, 1, DU_GY - top, c1); R(g, bx + w - 1, top, 1, DU_GY - top, cs);
+      for (let y = top + 10 + (h(i, 2) % 14); y < DU_GY; y += 26) { R(g, bx - 1, y, w + 2, 1, cs); R(g, bx, y + 1, w, 1, c1); }
+      for (let l = 0; l < 3; l++) { const ly = top + 14 + h(i, 20 + l) % 80, dx = (l & 1) ? -1 : 1, lc = day ? (far ? LIME : GRN) : (far ? NAVY : BLK);
+        L(g, bx + 1, ly, bx + 1 + dx * 9, ly + 4, lc, 2); L(g, bx + 1 + dx * 4, ly + 1, bx + 1 + dx * 8, ly + 6, lc, 1); }
+      if (far) duDith(g, bx - 1, top, w + 2, DU_GY - top, day ? WHT : BLK, 4);
     }
+    /* ground mist so the fighters read cleanly against the grove */
+    duDith(g, 0, 150, VW, 26, day ? PEACH : NAVY, 4); duDith(g, 0, 176, VW, DU_GY - 176, day ? PEACH : NAVY, 2);
   } else if (TH.kind === 2) {
     for (let i = 0; i < 7; i++) { const px = 10 + i * 28 + h(i, 4) % 10, ph = 50 + h(i, 5) % 30, py = DU_GY - 26 - h(i, 6) % 8;
       R(g, px, py - 6, 3, 10, BRN); for (let t = 0; t < 3; t++) { const wd = 18 - t * 5; PG(g, [[px + 1.5 - wd / 2, py - t * 14], [px + 1.5, py - ph / 2 - t * 12 + 14], [px + 1.5 + wd / 2, py - t * 14]], t & 1 ? GRN : DGR); R(g, px - wd / 2 + 4, py - t * 14 - 8, wd - 6, 2, WHT); } }
+    duDith(g, 0, 176, VW, DU_GY - 176, WHT, 4);
   } else {
     R(g, 0, 18, VW, DU_GY - 18, PEACH);
-    for (let x = 0; x < VW; x += 32) { for (let y = 36; y < DU_GY - 8; y += 28) { R(g, x + 3, y, 26, 24, WHT); R(g, x + 3, y, 26, 1, LGR); R(g, x + 15, y, 2, 24, BRN); R(g, x + 3, y + 11, 26, 1, BRN); } R(g, x, 18, 3, DU_GY - 18, BRN); }
+    for (let x = 0; x < VW; x += 32) { for (let y = 36; y < DU_GY - 8; y += 28) { R(g, x + 3, y, 26, 24, WHT); R(g, x + 3, y, 26, 1, LGR); R(g, x + 15, y, 1, 24, PEACH); R(g, x + 3, y + 11, 26, 1, PEACH); R(g, x + 9, y, 1, 24, PEACH); R(g, x + 22, y, 1, 24, PEACH); R(g, x + 3, y + 23, 26, 1, LGR); } R(g, x, 18, 3, DU_GY - 18, BRN); }
     R(g, 0, 28, VW, 6, BRN); R(g, 0, 34, VW, 1, BLK); R(g, 0, DU_GY - 8, VW, 8, BRN);
     R(g, 74, 46, 44, 64, BLK); R(g, 75, 47, 42, 62, WHT); R(g, 78, 50, 36, 56, RED); for (let i = 0; i < 6; i++) { const q = h(i, 9); R(g, 86 + (q % 3) * 6, 56 + i * 8, 6 + (q >>> 4) % 8, 3, BLK); } R(g, 72, 44, 48, 3, BLK); R(g, 94, 108, 4, 4, BLK);
     R(g, 14, 96, 12, 14, BLK); R(g, 16, 98, 8, 10, ORG); R(g, 17, 99, 6, 8, YEL); R(g, 17, 90, 1, 6, BLK); R(g, 166, 96, 12, 14, BLK); R(g, 168, 98, 8, 10, ORG); R(g, 169, 99, 6, 8, YEL); R(g, 173, 90, 1, 6, BLK);
@@ -151,15 +160,15 @@ function makeDuel(seed, skin) {
     else reason = why === 'wrong' ? 'CUT: GUARD ' + stanceName[A.stance] + ' NEXT TIME' : bs === 'gcool' ? 'CUT: GUARD WAS RECOVERING' : (bs === 'rec' || bs === 'stag') ? 'CUT: OPEN AFTER YOUR MISS' : 'CUT: GUARD ' + stanceName[A.stance] + ' OR STEP BACK';
     ph = 'kill'; kt = 0; winner = A; B.st = 'dead'; B.t = 0; flash = 0.14; shake = 0.25; lastKillMsg = 'SLASH!'; SFX.swish(); SFX.thud();
     if (B === FP) {
-      lives--; clean = 0; clock = Math.max(0, clock - 3); pop(FP.x, 205, 'DEFEATED -3s', RED); SFX.bad();
+      lives--; clean = 0; clock = Math.max(0, clock - 3); pop(FP.x, 112, 'DEFEATED -3S', RED); SFX.bad();
     } else {
       const dur = fightT / 60; wins++; const sp = duels[idx];
       const spd = Math.round(100 * clamp(1 - (dur - 1.5) / 9, 0, 1)), mult = 1 + 0.2 * Math.min(clean, 4);
       const pb = (A.rip > 0 && B.st !== 'x' && A.perfect) ? 100 : 0;
       const v = Math.round((100 + spd) * mult) + pb; me.score += v; clean++; bestClean = Math.max(bestClean, clean); fastest = Math.min(fastest, dur);
-      if (pb) { perfects++; pop(FE.x, 196, 'PERFECT PARRY +100', SKY); }
-      pop(FE.x, 210, '+' + v + (mult > 1 ? ' x' + mult.toFixed(1) : ''), YEL); SFX.win();
-      if (idx === NDU - 1) { const b = lives === 2 ? 300 : 150; me.score += b; pop(96, 120, 'ALL FIVE +' + b, ORG, 1); }
+      if (pb) { perfects++; pop(FE.x, 124, 'PERFECT PARRY +100', SKY); }
+      pop(FE.x, 112, '+' + v + (mult > 1 ? ' x' + mult.toFixed(1) : ''), YEL); SFX.win();
+      if (idx === NDU - 1) { const b = lives === 2 ? 300 : 150; me.score += b; pop(96, 136, 'ALL FIVE +' + b, ORG, 1); }
     }
   }
   function swing(A, B) {
@@ -171,12 +180,12 @@ function makeDuel(seed, skin) {
     A.x += A.dir * Math.min(6, Math.max(0, gap - 16)); clampX();
     if (about) {
       A.st = 'rec'; A.t = 0; A.recLen = 24; B.st = 'rec'; B.t = 0; B.recLen = 24; A.x -= A.dir * 5; B.x -= B.dir * 5; clampX(); flash = 0.06;
-      fx.push({ k: 'clash', x: (A.x + B.x) / 2, y: DU_GY - 24, t: 0 }); pop((A.x + B.x) / 2, 160, 'CLASH', WHT); SFX.tone(1200, 0.08, 'square', 0.1, 600); return;
+      fx.push({ k: 'clash', x: (A.x + B.x) / 2, y: DU_GY - 24, t: 0 }); pop((A.x + B.x) / 2, 108, 'CLASH', WHT); SFX.tone(1200, 0.08, 'square', 0.1, 600); return;
     }
     if (B.st === 'guard') {
       if (B.stance === A.stance) {
         A.st = 'stag'; A.t = 0; B.st = 'idle'; B.t = 0; B.rip = 70; B.perfect = true; B.lock = 0; A.x += A.dir * 0; flash = 0.05;
-        fx.push({ k: 'parry', x: B.x + B.dir * 16, y: DU_GY - 24, t: 0 }); hs = 0.26; shake = 0.12; pop(96, 96, 'CLANG!', WHT, 3); pop(B.x, 126, B === FP ? 'PARRY!' : 'BLOCKED! SWITCH STANCE', B === FP ? SKY : RED); SFX.ding(); SFX.tone(1800, 0.1, 'square', 0.1, 900);
+        fx.push({ k: 'parry', x: B.x + B.dir * 16, y: DU_GY - 24, t: 0 }); hs = 0.26; shake = 0.12; pop(96, 82, 'CLANG!', WHT, 3); pop(B.x, 108, B === FP ? 'PARRY!' : 'BLOCKED! SWITCH STANCE', B === FP ? SKY : RED); SFX.ding(); SFX.tone(1800, 0.1, 'square', 0.1, 900);
         if (B === FP) { buf = null; }
         return;
       }
@@ -272,7 +281,7 @@ function makeDuel(seed, skin) {
     clampX();
     if (FP.whiff && FP.st === 'swing') { /* whiff handled by recLen */ }
     if (fightT >= FLIM) {
-      ph = 'kill'; kt = 0; timeout = true; winner = FE; lives--; clean = 0; clock = Math.max(0, clock - 3); lastKillMsg = 'STALEMATE'; pop(96, 150, 'STALEMATE -3s', RED, 1); SFX.bad();
+      ph = 'kill'; kt = 0; timeout = true; winner = FE; lives--; clean = 0; clock = Math.max(0, clock - 3); lastKillMsg = 'STALEMATE'; pop(96, 112, 'STALEMATE -3S', RED, 1); SFX.bad();
     }
   }
   function startFight() { ph = 'fight'; fightT = 0; started = true; }
@@ -320,27 +329,30 @@ function makeDuel(seed, skin) {
     hd[1] += sway * 0; const bob = (st === 'idle' || st === 'gcool') ? sway : 0;
     const walk = f.walk || st === 'step', ws = walk ? (Math.floor(tm * 10 + f.ph) & 1) : 0;
     const base = m.body, dk = m.dark, lt = m.light, torsoY = -legH - 12 + bob;
-    // legs
-    const lg = sweep ? 3 : 0;
-    R(g, -7 - lg, -legH, 4, legH, BLK); R(g, -6 - lg, -legH, 2, legH, dk); R(g, -8 - lg, -2, 6, 2, BLK);
-    R(g, 3 + lg + (ws ? 1 : 0), -legH, 4, legH, BLK); R(g, 4 + lg + (ws ? 1 : 0), -legH, 2, legH, dk); R(g, 3 + lg + (ws ? 1 : 0), -2, 6, 2, BLK);
-    if (sweep) { R(g, -9, -2, 3, 2, BRN); R(g, 6, -2, 3, 2, BRN); }
-    // hakama
-    R(g, -6 + lean * 0, torsoY + 10, 12, 4, BLK); R(g, -5, torsoY + 10, 10, 3, dk);
-    // torso
-    const tx = lean;
-    R(g, tx - 6, torsoY, 12, 12, BLK); R(g, tx - 5, torsoY + 1, 10, 10, base);
-    R(g, tx - 5, torsoY + 1, 3, 10, lt === base ? dk : base);
-    P(g, tx - 1, torsoY + 1, dk); P(g, tx, torsoY + 2, dk); P(g, tx + 1, torsoY + 3, dk);
-    R(g, tx - 5, torsoY + 7, 10, 2, dk);
-    // back arm
-    L(g, tx - 4, torsoY + 3, tx - 7, torsoY + 8, BLK, 3); L(g, tx - 4, torsoY + 3, tx - 7, torsoY + 8, base, 1);
-    // head
+    if (st === 'idle') { hd[2] += Math.round(Math.sin(tm * 2.1 + f.ph)); hd[3] += Math.round(Math.sin(tm * 1.7 + f.ph + 1)); }
+    const lg = sweep ? 3 : 0, tx = lean, waist = torsoY + 10, spread = 7 + lg + ws;
+    // back arm (sleeve) behind the body
+    TL(g, tx - 4, torsoY + 3, tx - 7, torsoY + 9, 1, dk, BLK);
+    // hakama: wide pleated trousers, split by the stride
+    const hk = [[tx - 6, waist], [tx + 6, waist], [spread + 2, -2], [-spread - 2, -2]];
+    PG(g, hk, BLK, 1); PG(g, hk, dk);
+    L(g, Math.round(tx / 2), waist + 5, 0, -2, BLK); L(g, tx + 3, waist + 2, tx + 5, waist + 7, base); L(g, tx - 3, waist + 2, -spread + 1, -3, BLK);
+    // tabi feet
+    R(g, -spread - 3, -2, 6, 2, BLK); R(g, -spread - 2, -2, 4, 1, WHT); R(g, spread - 2, -2, 6, 2, BLK); R(g, spread - 1, -2, 4, 1, WHT);
+    // gi: outlined, shaded back, lit front, white lapel, black obi
+    R(g, tx - 6, torsoY, 12, 11, BLK); R(g, tx - 5, torsoY + 1, 10, 9, base);
+    R(g, tx - 5, torsoY + 1, 3, 9, dk); R(g, tx + 3, torsoY + 2, 1, 5, lt === base ? WHT : lt);
+    L(g, tx - 2, torsoY + 1, tx + 2, torsoY + 6, WHT); L(g, tx + 3, torsoY + 1, tx + 2, torsoY + 4, WHT);
+    R(g, tx - 6, waist - 2, 12, 3, BLK); R(g, tx - 5, waist - 1, 10, 1, isP ? lt : dk); P(g, tx - 4, waist - 1, WHT);
+    // head: outlined, back hair, eye + brow, nose
     const hx = tx + 1, hy2 = torsoY - 5;
     D(g, hx, hy2, 5, BLK); D(g, hx, hy2, 4, PEACH); R(g, hx + 1, hy2 - 1, 3, 2, PEACH);
-    P(g, hx + 3, hy2, BLK); P(g, hx + 2, hy2 - 1, BLK);
-    if (st === 'dead' || st === 'stag') { P(g, hx + 3, hy2, PEACH); R(g, hx + 2, hy2, 2, 1, BLK); }
-    if (isP) { R(g, hx - 5, hy2 - 3, 11, 3, m.light); R(g, hx - 5, hy2 - 3, 11, 1, WHT); R(g, hx - 5, hy2 - 1, 11, 1, dk); const fl = Math.floor(tm * 8) & 1; L(g, hx - 5, hy2 - 2, hx - 11, hy2 + (fl ? 1 : -1), m.light, 2); L(g, hx - 5, hy2 - 3, hx - 10, hy2 - 4 + (fl ? 2 : 0), dk, 1); R(g, hx - 4, hy2 - 6, 8, 3, BLK); }
+    R(g, hx - 4, hy2 - 2, 3, 4, BLK); R(g, hx - 3, hy2 - 3, 4, 1, BLK); P(g, hx, hy2 + 1, BRN);
+    P(g, hx + 5, hy2, PEACH); P(g, hx + 5, hy2 - 1, BLK); P(g, hx + 6, hy2, BLK);
+    R(g, hx + 2, hy2 - 2, 2, 1, BLK); P(g, hx + 3, hy2, BLK); R(g, hx + 2, hy2 + 2, 2, 1, BRN);
+    if (st === 'dead' || st === 'stag') { P(g, hx + 3, hy2, PEACH); R(g, hx + 2, hy2, 2, 1, BLK); R(g, hx + 2, hy2 + 2, 3, 1, BLK); }
+    else if (st === 'wind' || st === 'swing') R(g, hx + 2, hy2 - 3, 3, 1, BLK);
+    if (isP) { R(g, hx - 5, hy2 - 3, 11, 3, m.light); R(g, hx - 5, hy2 - 3, 11, 1, WHT); R(g, hx - 5, hy2 - 1, 11, 1, dk); const fl = Math.floor(tm * 8) & 1; L(g, hx - 5, hy2 - 2, hx - 11, hy2 + (fl ? 1 : -1), m.light, 2); L(g, hx - 5, hy2 - 3, hx - 10, hy2 - 4 + (fl ? 2 : 0), dk, 1); R(g, hx - 4, hy2 - 6, 8, 3, BLK); R(g, hx - 2, hy2 - 8, 3, 2, BLK); }
     else if (kind === 'rush') { R(g, hx - 5, hy2 - 6, 11, 4, BLK); R(g, hx - 1, hy2 - 9, 4, 4, BLK); R(g, hx + 1, hy2 - 3, 4, 1, BLK); P(g, hx + 3, hy2 - 2, RED); R(g, hx - 5, hy2 - 3, 11, 1, RED); }
     else if (kind === 'counter') { PG(g, [[hx - 10, hy2 - 2], [hx, hy2 - 11], [hx + 10, hy2 - 2]], BLK, 0); PG(g, [[hx - 9, hy2 - 3], [hx, hy2 - 10], [hx + 9, hy2 - 3]], ORG); R(g, hx - 9, hy2 - 3, 19, 1, BRN); R(g, hx - 3, hy2 - 8, 1, 4, BRN); R(g, hx + 2, hy2 - 8, 1, 4, BRN); R(g, hx - 1, hy2 + 3, 5, 2, WHT); }
     else if (kind === 'feint') { R(g, hx - 4, hy2 - 4, 10, 9, BLK); R(g, hx - 3, hy2 - 3, 8, 8, WHT); PG(g, [[hx - 4, hy2 - 4], [hx - 3, hy2 - 10], [hx, hy2 - 4]], BLK); PG(g, [[hx + 2, hy2 - 4], [hx + 4, hy2 - 10], [hx + 6, hy2 - 4]], BLK); P(g, hx - 3, hy2 - 7, PINK); P(g, hx + 4, hy2 - 7, PINK); R(g, hx + 3, hy2 + 1, 3, 2, BLK); P(g, hx + 3, hy2 - 1, RED); R(g, hx - 3, hy2 + 1, 2, 1, RED); R(g, hx + 5, hy2 + 1, 1, 1, RED); L(g, tx - 5, torsoY + 8, tx - 12, torsoY + 12 + (Math.floor(tm * 4) & 1), PINK, 2); }
@@ -348,8 +360,8 @@ function makeDuel(seed, skin) {
     else if (kind === 'mirror') { R(g, hx - 4, hy2 - 5, 9, 9, BLK); R(g, hx - 3, hy2 - 4, 7, 7, LGR); R(g, hx - 3, hy2 - 4, 3, 7, WHT); R(g, hx + 1, hy2 - 2, 3, 1, SKY); R(g, hx - 3, hy2 - 8, 8, 4, BLK); R(g, hx - 2, hy2 - 7, 6, 2, WHT); if (Math.floor(tm * 3) % 5 === 0) R(g, hx - 3, hy2 - 4, 7, 1, SKY); }
     // front arm + sword
     const sx = tx + 3, sy = torsoY + 3;
-    L(g, sx, sy, hd[0], hd[1] + bob, BLK, 3); L(g, sx, sy, hd[0], hd[1] + bob, base, 1);
-    D(g, hd[0], hd[1] + bob, 1, PEACH);
+    TL(g, sx, sy, hd[0], hd[1] + bob, 1, base, BLK); P(g, sx, sy, lt === base ? WHT : lt);
+    D(g, hd[0], hd[1] + bob, 2, BLK); D(g, hd[0], hd[1] + bob, 1, PEACH);
     const bx = hd[0], by = hd[1] + bob, ex2 = hd[2], ey = hd[3] + bob;
     const dxx = ex2 - bx, dyy = ey - by, ln = Math.hypot(dxx, dyy) || 1;
     // blade from slightly behind the hand to the tip
@@ -357,7 +369,7 @@ function makeDuel(seed, skin) {
     L(g, ax - 1, ay - 1, ex2 + dxx / ln * 3 - 1, ey + dyy / ln * 3 - 1, BLK, 3);
     L(g, ax, ay, ex2 + dxx / ln * 3, ey + dyy / ln * 3, st === 'swing' ? WHT : LGR, 1);
     L(g, bx, by, ex2 + dxx / ln * 3, ey + dyy / ln * 3, WHT, 1);
-    R(g, bx - 1 - (dyy / ln > 0.5 ? 0 : 0), by - 2, 2, 4, YEL);
+    { const nx = -dyy / ln, ny = dxx / ln, gx = bx + dxx / ln * 2, gy = by + dyy / ln * 2; L(g, gx - nx * 2, gy - ny * 2, gx + nx * 2, gy + ny * 2, YEL); L(g, ax, ay, bx - dxx / ln, by - dyy / ln, BLK, 2); P(g, Math.round(ax + dxx / ln), Math.round(ay + dyy / ln), dk); }
     // real wind-up glint on the final frames
     if (st === 'wind' && !f.fake && f.t >= f.G + f.W - 5) { const tx2 = ex2 + dxx / ln * 3, ty2 = ey + dyy / ln * 3; R(g, tx2 - 2, ty2, 5, 1, WHT); R(g, tx2, ty2 - 2, 1, 5, WHT); P(g, tx2 - 1, ty2 - 1, YEL); P(g, tx2 + 1, ty2 + 1, YEL); }
     if (st === 'wind' && !f.fake && f.t < f.G && (f.t & 2)) { P(g, bx - 1, by - 3, YEL); P(g, bx + 2, by - 4, ORG); }
@@ -387,6 +399,12 @@ function makeDuel(seed, skin) {
   const pm = () => ({ body: skin.main, dark: skin.dark, light: skin.light });
   function pips(g, f, x, y, c) { for (let i = 0; i < 3; i++) { const on = f.stance === i; R(g, x - 5, y + i * 4, 11, 3, BLK); if (on) R(g, x - 4, y + i * 4, 9, 3, c); else R(g, x - 4, y + i * 4 + 1, 9, 1, DGR); } }
 
+  let deckC = null;
+  function deckPaint(g) {
+    R(g, 0, DU_AH, VW, VH - DU_AH, BLK); R(g, 1, DU_AH + 1, VW - 2, VH - DU_AH - 2, NAVY);
+    for (let y = DU_AH + 2; y < VH - 1; y += 2) for (let x = (y & 2) ? 1 : 3; x < VW - 1; x += 4) P(g, x, y, BLK);
+    R(g, 2, 287, VW - 4, 1, BLK);
+  }
   me.draw = g => {
     g.save();
     if (shake > 0) g.translate(Math.round((Math.random() - 0.5) * 4 * shake * 4), 0);
@@ -402,52 +420,68 @@ function makeDuel(seed, skin) {
       else { for (let i = 0; i < 6; i++) { const an = i * 1.05; L(g, q.x + Math.cos(an) * 3, q.y + Math.sin(an) * 3, q.x + Math.cos(an) * (6 + a * 12), q.y + Math.sin(an) * (6 + a * 12), i & 1 ? YEL : WHT, 1); } } });
     // indicators
     const SCOL = [PINK, ORG, LIME];
+    const stIcon = (x, y, v) => { const c = SCOL[v], dr = (xx, yy, cc) => { if (v === 0) arrowV(g, xx, yy + 2, -1, 3, cc); else if (v === 2) arrowV(g, xx, yy - 2, 1, 3, cc); else { R(g, xx - 3, yy - 1, 7, 3, cc); } };
+      [[-1, 0], [1, 0], [0, -1], [0, 1]].forEach(o => dr(x + o[0], y + o[1], BLK)); dr(x, y, c); };
+    const tagPanel = (x0, w, who, wc, v, l2, l2c, right) => {
+      const y0 = 138; R(g, x0, y0, w, 23, BLK); R(g, x0 + 1, y0 + 1, w - 2, 21, NAVY); R(g, x0 + 1, y0 + 1, w - 2, 1, SCOL[v]);
+      const s1 = who + ' ', s2 = stanceName[v], tot = tw(s1 + s2), lx = right ? x0 + w - 4 - tot : x0 + 4;
+      T(g, s1, lx, y0 + 4, wc); T(g, s2, lx + tw(s1) + 1, y0 + 4, SCOL[v]);
+      T(g, l2, right ? x0 + w - 4 : x0 + 4, y0 + 13, l2c, { al: right ? 'r' : null });
+    };
     if (ph === 'fight' || ph === 'intro') {
       const realW = FE.st === 'wind' && !FE.fake;
       if (realW && ph === 'fight') {
         const tot = FE.G + FE.W, rem = Math.max(0, tot - FE.t), col = SCOL[FE.stance], bl = (Math.floor(tm * 14) & 1);
-        g.globalAlpha = bl ? 0.35 : 0.15; D(g, FE.x, DU_GY - 20, 22, col); g.globalAlpha = 1;
+        g.globalAlpha = bl ? 0.3 : 0.12; D(g, FE.x, DU_GY - 20, 22, col); g.globalAlpha = 1;
         // shrinking impact ring on the target
         const rad = 3 + 24 * rem / Math.max(1, tot);
         g.lineWidth = 2; g.strokeStyle = PAL[BLK]; g.beginPath(); g.arc(FP.x, DU_GY - 20, rad + 1, 0, 6.2832); g.stroke();
         g.lineWidth = 1; g.strokeStyle = PAL[rem < 8 ? RED : col]; g.beginPath(); g.arc(FP.x, DU_GY - 20, rad, 0, 6.2832); g.stroke();
         // stance banner
-        const nm = stanceName[FE.stance], bw = 112, bx0 = 96 - bw / 2;
-        R(g, bx0 - 1, 51, bw + 2, 24, BLK); R(g, bx0, 52, bw, 22, bl ? col : NAVY); R(g, bx0 + 2, 54, bw - 4, 18, bl ? NAVY : BLK);
-        if (FE.stance === 0) arrowV(g, bx0 + 14, 64, -1, 6, col); else if (FE.stance === 2) arrowV(g, bx0 + 14, 60, 1, 6, col); else arrowH(g, bx0 + 14, 63, -1, 6, col);
-        T(g, 'ATTACK ' + nm, bx0 + 26, 56, WHT); T(g, 'GUARD ' + nm + '!', bx0 + 26, 65, col);
+        const nm = stanceName[FE.stance], bw = 120, bx0 = 96 - bw / 2, by0 = 57;
+        R(g, bx0 - 1, by0 - 1, bw + 2, 25, BLK); R(g, bx0, by0, bw, 23, bl ? col : DGR); R(g, bx0 + 2, by0 + 2, bw - 4, 19, BLK);
+        R(g, bx0 + 3, by0 + 3, 19, 17, NAVY);
+        if (FE.stance === 0) arrowV(g, bx0 + 12, by0 + 13, -1, 6, col); else if (FE.stance === 2) arrowV(g, bx0 + 12, by0 + 9, 1, 6, col); else arrowH(g, bx0 + 12, by0 + 11, -1, 6, col);
+        T(g, 'ATTACK ' + nm, bx0 + 27, by0 + 3, WHT); T(g, 'GUARD ' + nm + '!', bx0 + 27, by0 + 12, col);
       }
-      T(g, stanceName[FP.stance], FP.x, DU_GY - 62, SCOL[FP.stance], { al: 'c', ol: BLK });
-      T(g, stanceName[FE.stance], FE.x, DU_GY - 62, SCOL[FE.stance], { al: 'c', ol: BLK });
-      if ((FE.st === 'rec' || FE.st === 'stag') && !(FP.rip > 0)) T(g, 'OPEN! STRIKE!', FE.x, DU_GY - 74, YEL, { al: 'c', ol: BLK });
-      else if (FE.st === 'gcool') T(g, 'GUARD DROPPED', FE.x, DU_GY - 74, LIME, { al: 'c', ol: BLK });
-      else if (FE.st === 'wind' && FE.fake) T(g, 'FEINT? WAIT', FE.x, DU_GY - 74, LAV, { al: 'c', ol: BLK });
-      else if (FE.st === 'guard') T(g, 'THEY GUARD ' + stanceName[FE.stance], FE.x, DU_GY - 74, SKY, { al: 'c', ol: BLK });
-      if (FP.st === 'rec' || FP.st === 'stag') T(g, 'EXPOSED', FP.x, DU_GY - 74, RED, { al: 'c', ol: BLK });
-      else if (FP.st === 'guard') T(g, 'GUARDING ' + stanceName[FP.stance], FP.x, DU_GY - 74, SKY, { al: 'c', ol: BLK });
-      else if (FP.rip > 0) T(g, 'RIPOSTE', FP.x, DU_GY - 74, SKY, { al: 'c', ol: BLK });
-      if (ph === 'fight' && FP.rip > 0 && FE.st === 'stag' && (Math.floor(tm * 8) & 1)) T(g, 'NOW STRIKE!', 96, 84, YEL, { al: 'c', s: 2, ol: BLK });
+      // stance icons over heads, details in fixed side panels (never overlap)
+      stIcon(Math.round(FP.x), DU_GY - 52, FP.stance); stIcon(Math.round(FE.x), DU_GY - 52, FE.stance);
+      let e2 = dm.sub, e2c = LGR;
+      if ((FE.st === 'rec' || FE.st === 'stag') && !(FP.rip > 0)) { e2 = 'OPEN! STRIKE!'; e2c = YEL; }
+      else if (FE.st === 'gcool') { e2 = 'GUARD DROPPED'; e2c = LIME; }
+      else if (FE.st === 'wind' && FE.fake) { e2 = 'FEINT? WAIT'; e2c = LAV; }
+      else if (FE.st === 'wind') { e2 = 'ATTACKING!'; e2c = RED; }
+      else if (FE.st === 'guard') { e2 = 'GUARDING'; e2c = SKY; }
+      let p2 = 'READY', p2c = LGR;
+      if (FP.st === 'rec' || FP.st === 'stag') { p2 = 'EXPOSED'; p2c = RED; }
+      else if (FP.st === 'guard') { p2 = 'GUARDING'; p2c = SKY; }
+      else if (FP.rip > 0) { p2 = 'RIPOSTE!'; p2c = SKY; }
+      else if (FP.st === 'gcool') { p2 = 'RECOVERING'; p2c = DGR; }
+      tagPanel(2, 90, 'YOU', skin.light === LGR ? skin.main : skin.light, FP.stance, p2, p2c, false);
+      tagPanel(100, 90, dm.name, dm.body === WHT ? WHT : dm.light, FE.stance, e2, e2c, true);
+      if (ph === 'fight' && FP.rip > 0 && FE.st === 'stag' && (Math.floor(tm * 8) & 1)) T(g, 'NOW STRIKE!', 96, 120, YEL, { al: 'c', s: 2, ol: BLK });
     }
     // kill cinematic
+    const resPanel = (c, l1, l2) => { R(g, 0, 63, VW, 34, BLK); R(g, 0, 64, VW, 1, c); R(g, 0, 95, VW, 1, c); R(g, 0, 66, VW, 28, NAVY); T(g, l1, 96, 69, c, { al: 'c', s: 2, sh: BLK }); T(g, l2, 96, 86, WHT, { al: 'c' }); };
     if (ph === 'kill' && !timeout && loserDead) {
       const lx = loserDead.x, ly = DU_GY - 18, a = clamp(kt / 0.12, 0, 1), fade = kt < 0.6 ? 1 : clamp(1 - (kt - 0.6) / 0.5, 0, 1);
       if (fade > 0) { const dirn = winner.dir; g.globalAlpha = fade; L(g, lx - dirn * 34 * a, ly - 30 * a * 1, lx + dirn * 34 * a, ly + 30 * a, BLK, 5); L(g, lx - dirn * 34 * a, ly - 30 * a, lx + dirn * 34 * a, ly + 30 * a, RED, 3); L(g, lx - dirn * 30 * a, ly - 27 * a, lx + dirn * 30 * a, ly + 27 * a, WHT, 1); g.globalAlpha = 1; }
-      if (kt < 0.9) T(g, lastKillMsg, 96, 100 - kt * 6, YEL, { al: 'c', s: 3, ol: BLK });
-      if (kt > 0.2) { const w = winner === FP; R(g, 0, 138, VW, 20, BLK); R(g, 0, 138, VW, 1, w ? LIME : RED); R(g, 0, 157, VW, 1, w ? LIME : RED); T(g, w ? 'YOU WIN' : 'YOU FELL', 96, 142, w ? LIME : RED, { al: 'c' }); T(g, reason, 96, 150, WHT, { al: 'c' }); }
+      if (kt < 0.9) T(g, lastKillMsg, 96, 38 - Math.round(kt * 4), YEL, { al: 'c', s: 3, ol: BLK });
+      if (kt > 0.2) { const w = winner === FP; resPanel(w ? LIME : RED, w ? 'YOU WIN' : 'YOU FELL', reason); }
       if (flash > 0) { g.globalAlpha = Math.min(0.85, flash * 7); R(g, 0, 19, VW, DU_AH - 19, WHT); g.globalAlpha = 1; }
-    } else if (ph === 'kill' && timeout) { if (kt < 1.2) T(g, 'STALEMATE', 96, 112, RED, { al: 'c', s: 2, ol: BLK }); R(g, 0, 138, VW, 20, BLK); T(g, 'TIME RAN OUT', 96, 142, RED, { al: 'c' }); T(g, 'ATTACK OR PARRY SOONER', 96, 150, WHT, { al: 'c' }); }
+    } else if (ph === 'kill' && timeout) { if (kt < 1.2) T(g, 'STALEMATE', 96, 40, RED, { al: 'c', s: 2, ol: BLK }); resPanel(RED, 'TIME RAN OUT', 'ATTACK OR PARRY SOONER'); }
     if (ph === 'fight' && flash > 0) { g.globalAlpha = Math.min(0.5, flash * 6); R(g, 0, 19, VW, DU_AH - 19, WHT); g.globalAlpha = 1; }
     g.restore();
     // letterbox bars during kill
     if (ph === 'kill') { const bh = Math.round(clamp(kt / 0.15, 0, 1) * 14); R(g, 0, 19, VW, bh, BLK); R(g, 0, DU_AH - bh, VW, bh, BLK); }
-    // sudden death
-    if (ph === 'fight' && sd > 0 && (Math.floor(tm * 4) & 1)) T(g, 'SUDDEN DEATH', 96, 26, RED, { al: 'c', ol: BLK });
+    // sudden death strip under the HUD
+    if (ph === 'fight' && sd > 0) { R(g, 0, 21, VW, 10, BLK); if (Math.floor(tm * 4) & 1) T(g, 'SUDDEN DEATH', 96, 22, RED, { al: 'c' }); }
     pops.forEach(q => T(g, q.s, clamp(q.x, 6 + tw(q.s, q.sc) / 2, 186 - tw(q.s, q.sc) / 2), q.y - q.t * 16, q.c, { al: 'c', ol: BLK, s: q.sc }));
     // intro card
     if (ph === 'intro') {
-      const d = DU_DES[sp.kind], k = clamp(it / 0.2, 0, 1);
-      R(g, 0, 70, VW, 54, BLK); R(g, 0, 70, VW, 1, d.body); R(g, 0, 123, VW, 1, d.body);
-      T(g, 'DUEL ' + (idx + 1) + ' OF ' + NDU, 96, 76, LGR, { al: 'c' }); T(g, d.name, 96, 88, d.body === WHT ? WHT : d.body, { al: 'c', s: 3, ol: BLK }); T(g, idx === 0 ? 'PRACTICE: LEARN TO PARRY' : d.sub + '  ' + d.tag, 96, 112, YEL, { al: 'c' });
+      const d = DU_DES[sp.kind], nc = d.body === WHT ? WHT : d.body === LGR ? WHT : d.body;
+      R(g, 0, 68, VW, 58, BLK); R(g, 0, 69, VW, 1, nc); R(g, 0, 124, VW, 1, nc); R(g, 0, 71, VW, 52, NAVY);
+      T(g, 'DUEL ' + (idx + 1) + ' OF ' + NDU, 96, 75, LGR, { al: 'c' }); T(g, d.name, 96, 87, nc, { al: 'c', s: 3, sh: BLK }); T(g, idx === 0 ? 'PRACTICE: LEARN TO PARRY' : d.sub + ': ' + d.tag, 96, 112, YEL, { al: 'c' });
     }
     // tutorial coach
     if (idx === 0 && ph === 'fight') {
@@ -456,17 +490,19 @@ function makeDuel(seed, skin) {
       else if (FP.rip > 0 && FE.st === 'stag') { l1 = 'NOW STRIKE!'; l2 = 'FREE KILL'; }
       else if (FE.st === 'rec' || FE.st === 'stag') { l1 = 'THEY ARE OPEN'; l2 = 'STEP IN AND STRIKE'; }
       else if (FP.st === 'guard') { l1 = 'GUARD UP'; l2 = 'WAIT FOR THE BLOW'; }
-      R(g, 5, 24, VW - 10, 22, BLK); R(g, 6, 25, VW - 12, 20, NAVY); R(g, 6, 25, VW - 12, 1, LIME);
-      T(g, l1, 96, 28, YEL, { al: 'c' }); T(g, l2, 96, 37, WHT, { al: 'c' });
+      R(g, 5, 32, VW - 10, 22, BLK); R(g, 6, 33, VW - 12, 20, NAVY); R(g, 6, 33, VW - 12, 1, LIME);
+      T(g, l1, 96, 35, YEL, { al: 'c' }); T(g, l2, 96, 44, WHT, { al: 'c' });
     }
     // HUD
     R(g, 0, 0, VW, 19, BLK); R(g, 0, 18, VW, 1, DGR);
-    T(g, 'DUEL ' + Math.min(idx + 1, NDU) + '/' + NDU, 3, 2, WHT);
-    for (let i = 0; i < 2; i++) { const on = i < lives, hx = 3 + i * 11, hc = on ? RED : DGR; R(g, hx, 11, 3, 3, hc); R(g, hx + 4, 11, 3, 3, hc); R(g, hx, 12, 7, 2, hc); R(g, hx + 1, 14, 5, 1, hc); R(g, hx + 2, 15, 3, 1, hc); }
-    T(g, 'LIVES', 28, 11, LGR);
-    const rem = Math.max(0, Math.ceil(clock)); T(g, rem + '', 96, 4, rem <= 10 ? RED : WHT, { s: 2, al: 'c' });
-    T(g, me.score + '', 168, 2, YEL, { al: 'r' }); T(g, 'SCORE', 168, 11, LGR, { al: 'r' }); 
+    T(g, 'DUEL', 3, 2, LGR); T(g, Math.min(idx + 1, NDU) + '/' + NDU, 30, 2, WHT);
+    for (let i = 0; i < 2; i++) { const on = i < lives, hx = 3 + i * 10, hc = on ? RED : DGR; R(g, hx, 11, 3, 3, hc); R(g, hx + 4, 11, 3, 3, hc); R(g, hx, 12, 7, 2, hc); R(g, hx + 1, 14, 5, 1, hc); R(g, hx + 2, 15, 3, 1, hc); if (on) P(g, hx + 1, 11, PINK); }
+    const rem = Math.max(0, Math.ceil(clock)); R(g, 78, 1, 36, 17, DGR); R(g, 79, 2, 34, 15, BLK); T(g, rem + '', 96, 3, rem <= 10 ? RED : WHT, { s: 2, al: 'c' });
+    T(g, 'SCORE', 172, 2, LGR, { al: 'r' }); T(g, me.score + '', 172, 11, YEL, { al: 'r' });
     if (ph === 'fight') { const f = clamp(fightT / FLIM, 0, 1); R(g, 0, 19, VW, 2, BLK); R(g, 0, 19, Math.round(VW * f), 2, sd > 0 ? RED : DGR); }
+    // control deck plate behind the buttons
+    if (deckC === null) { try { deckC = document.createElement('canvas'); deckC.width = VW; deckC.height = VH; deckPaint(deckC.getContext('2d')); } catch (e) { deckC = false; } }
+    if (deckC) g.drawImage(deckC, 0, DU_AH, VW, VH - DU_AH, 0, DU_AH, VW, VH - DU_AH); else deckPaint(g);
     // button state
     const warn = ph === 'fight' && FE.st === 'wind' && !FE.fake && FP.st !== 'guard', pul = (Math.floor(tm * 8) & 1) === 1;
     me.buttons.forEach(b => {
@@ -475,11 +511,12 @@ function makeDuel(seed, skin) {
       else if (b.id === 'guard') { b.c = (FP.st === 'gcool') ? DGR : (warn && FP.stance === FE.stance && pul) ? WHT : SKY; }
       else if (b.id === 'strike') { b.c = (FP.st === 'rec' || FP.st === 'stag') ? DGR : RED; }
     });
-    if (me.over) { g.globalAlpha = 0.6; R(g, 0, 19, VW, DU_AH - 19, BLK); g.globalAlpha = 1; T(g, msg, 96, 120, msg === 'FLAWLESS' ? YEL : WHT, { s: 2, al: 'c', ol: BLK }); }
+    if (me.over) { g.globalAlpha = 0.6; R(g, 0, 21, VW, DU_AH - 21, BLK); g.globalAlpha = 1; const oc = msg === 'FLAWLESS' ? YEL : msg === 'DEFEATED' || msg === 'TIME UP' ? RED : WHT;
+      R(g, 14, 100, 164, 44, BLK); R(g, 15, 101, 162, 42, oc); R(g, 16, 102, 160, 40, NAVY); T(g, msg, 96, 109, oc, { s: 2, al: 'c', sh: BLK }); T(g, 'WON ' + wins + ' OF ' + NDU + '   SCORE ' + me.score, 96, 129, WHT, { al: 'c' }); }
   };
   me.drawOver = g => {
     // stance legend for swipe, on arena bottom
-    if (ph === 'fight' && fightT < 150) T(g, 'SWIPE UP/DOWN OR TAP: STANCE', 96, 242, LGR, { al: 'c', ol: BLK });
+    if (ph === 'fight' && fightT < 150) { R(g, 0, 239, VW, 13, BLK); T(g, 'SWIPE UP/DOWN OR TAP: STANCE', 96, 242, WHT, { al: 'c' }); }
   };
   me.summary = () => ['DUELS WON ' + wins + ' OF ' + NDU, 'PERFECT PARRIES ' + perfects, 'BEST STREAK ' + bestClean, wins ? 'FASTEST ' + fastest.toFixed(1) + 'S' : 'NO KILLS'];
   me.debug = () => {
@@ -498,15 +535,28 @@ const DEF_DUEL = {
   how: ['>READ', 'ONE CLEAN HIT KILLS.', 'WATCH THE BLADE: ITS HEIGHT', 'IS THE STANCE. GLINT = REAL.', '>DEFEND', 'GUARD IN THE SAME STANCE', 'TO PARRY, THEN STRIKE FREE.', 'WRONG STANCE = CUT DOWN.', '>MOVE', 'STEP BACK TO WHIFF THEM,', 'THEN PUNISH. WHIFFS COST.', '>FIVE DUELS, 75 SECONDS', 'FAST KILLS + STREAK = SCORE.']
 };
 DEF_DUEL.art = function (g, x, y, w, h) {
-  R(g, x, y, w, h, PEACH); R(g, x, y, w, 20, ORG); DT(g, x, y + 16, w, 8, ORG, PEACH, 0); D(g, x + 42, y + 22, 13, RED); D(g, x + 42, y + 22, 11, RED);
-  for (let i = 0; i < 6; i++) { const bx = x + 4 + i * 15; R(g, bx, y, 3, h, GRN); R(g, bx, y, 1, h, LIME); R(g, bx - 1, y + 14 + (i % 3) * 12, 5, 1, DGR); }
-  R(g, x, y + h - 12, w, 12, BRN); R(g, x, y + h - 12, w, 1, BLK);
-  const gy = y + h - 12;
-  [[x + 20, 1, ORG, BRN], [x + 64, -1, SKY, NAVY]].forEach(q => {
-    const fx0 = q[0], d = q[1];
-    R(g, fx0 - 4, gy - 10, 3, 10, BLK); R(g, fx0 + 1, gy - 10, 3, 10, BLK); R(g, fx0 - 4, gy - 22, 9, 13, BLK); R(g, fx0 - 3, gy - 21, 7, 10, q[2]); R(g, fx0 - 3, gy - 14, 7, 2, q[3]); D(g, fx0, gy - 26, 4, BLK); D(g, fx0, gy - 26, 3, PEACH); R(g, fx0 - 4, gy - 29, 9, 3, BLK);
-    L(g, fx0 + d * 3, gy - 18, fx0 + d * 16, gy - 28, BLK, 3); L(g, fx0 + d * 3, gy - 18, fx0 + d * 16, gy - 28, WHT, 1);
-  });
-  L(g, x + 38, gy - 36, x + 50, gy - 6, BLK, 3); L(g, x + 38, gy - 36, x + 50, gy - 6, RED, 1); R(g, x + 42, gy - 22, 4, 1, WHT);
-  T(g, 'ONE STRIKE', x + w / 2, y + 3, BLK, { al: 'c' });
+  /* sunset duel: banded sky, huge sun, two silhouettes clashing on a ridge, sparks at the crossing */
+  const band = [PLUM, RED, ORG, YEL, PEACH], bh = [0, 10, 20, 28, 34];
+  for (let b = 0; b < 5; b++) R(g, x, y + bh[b], w, (bh[b + 1] || h) - bh[b], band[b]);
+  for (let b = 1; b < 5; b++) DT(g, x, y + bh[b] - 1, w, 2, band[b - 1], band[b], b);
+  D(g, x + 42, y + 22, 15, YEL); D(g, x + 42, y + 22, 13, WHT); R(g, x + 28, y + 27, 28, 1, PEACH); R(g, x + 29, y + 31, 26, 1, YEL);
+  R(g, x, y + 46, w, h - 46, BLK); E(g, x + 42, y + 46, 30, 2, BLK);
+  /* bamboo silhouettes framing the edges */
+  [[x + 1, 4], [x + w - 5, 4]].forEach((q, k) => { R(g, q[0], y, q[1], h, BLK); for (let yy = 6 + k * 3; yy < h; yy += 11) R(g, q[0] - 1, y + yy, q[1] + 2, 1, BLK);
+    const dx = k < 1 ? 1 : -1; for (let l = 0; l < 3; l++) { const ly = y + 8 + l * 13 + k * 2; L(g, q[0] + 1, ly, q[0] + 1 + dx * 8, ly + 3, BLK, 2); } });
+  for (let i = 0; i < 9; i++) { const q = hash2(i, 31); P(g, x + 16 + q % 52, y + 3 + (q >>> 8) % 40, (q >>> 16) & 1 ? PINK : WHT); }
+  /* two duellists: silhouettes with colour sashes, blades crossed against the sun */
+  const fig = (fx, d, sash) => {
+    const gy = y + 46;
+    PG(g, [[fx - 4, gy - 10], [fx + 4, gy - 10], [fx + 7, gy], [fx - 7, gy]], BLK); R(g, fx - 1, gy - 6, 1, 6, sash === ORG ? BRN : NAVY);
+    R(g, fx - 4, gy - 20, 9, 11, BLK); R(g, fx - 4, gy - 12, 9, 2, sash);
+    D(g, fx + d, gy - 23, 3, BLK); R(g, fx - d * 2 - 1, gy - 28, 3, 3, BLK);
+    L(g, fx - 4 * d, gy - 21, fx - 11 * d, gy - 18, sash, 1); L(g, fx - 4 * d, gy - 20, fx - 10 * d, gy - 16, sash, 1);
+    TL(g, fx + 2 * d, gy - 18, fx + 8 * d, gy - 15, 1, BLK);
+  };
+  fig(x + 22, 1, ORG); fig(x + 62, -1, SKY);
+  L(g, x + 30, y + 31, x + 52, y + 12, BLK, 2); L(g, x + 31, y + 30, x + 52, y + 12, LGR, 1);
+  L(g, x + 54, y + 31, x + 32, y + 12, BLK, 2); L(g, x + 53, y + 30, x + 32, y + 12, LGR, 1);
+  const sx = x + 42, sy = y + 21; R(g, sx - 4, sy, 9, 1, YEL); R(g, sx, sy - 4, 1, 9, YEL); P(g, sx, sy, WHT); P(g, sx - 2, sy - 2, ORG); P(g, sx + 2, sy + 2, ORG); P(g, sx + 2, sy - 2, ORG); P(g, sx - 2, sy + 2, ORG);
+  R(g, x, y + 50, w, 1, PLUM); DT(g, x, y + 52, w, 4, BLK, PLUM, 0);
 };

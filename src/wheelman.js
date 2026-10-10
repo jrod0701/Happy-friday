@@ -238,6 +238,7 @@ function makeWheelman(seed, skin) {
       const x = tx * 8, y = ty * 8; R(bg, x, y, 8, 8, TH.grass[0]); D(bg, x + 5, y + 5, 4, TH.tree[0]); D(bg, x + 4, y + 4, 4, TH.tree[1]); D(bg, x + 3, y + 3, 2, TH.tree[2]);
     }
   }
+  tdDim(bake, TH.night ? 0.06 : TH.snow ? 0.2 : 0.14);
   D(bg, 576, 576, 7, TH.water[0]); D(bg, 576, 576, 5, TH.water[1]); D(bg, 576, 576, 3, TH.water[0]); P(bg, 576, 573, WHT); P(bg, 574, 576, WHT); P(bg, 578, 577, WHT);
   city.ramps.forEach(rp => {
     for (let u = 0; u < rp.len; u++) for (let l = -rp.hw; l < rp.hw; l++) {
@@ -257,7 +258,7 @@ function makeWheelman(seed, skin) {
     for (let y = 0; y < 48; y++) for (let x = 0; x < 48; x++) { let c = -1, w = 0; for (let dy = 0; dy < 3; dy++) for (let dx = 0; dx < 3; dx++) { const t = map.at(x * 3 + dx, y * 3 + dy); if (t === 1 || t === 5) w += 2; else if (t === 2) w += 0.5; else if (t === 4) w -= 1; else if (t === 0) w -= 0.2; }
       c = w >= 3 ? WHT : w >= 1 ? LGR : w <= -4 ? SKY : (map.at(x * 3 + 1, y * 3 + 1) === 3 ? DGR : map.at(x * 3 + 1, y * 3 + 1) === 4 ? SKY : GRN); if (map.at(x * 3 + 1, y * 3 + 1) === 3 && map.d[(y * 3 + 1) * map.w + x * 3 + 1] !== WM_TREE && c !== WHT && c !== LGR) c = DGR; P(g, x, y, c); } }
   /* ---- player ---- */
-  const car = tdCarNew('taxi', city.spawn.x, city.spawn.y, city.spawn.a, { m: skin.main, d: skin.dark, l: skin.light });
+  const car = tdCarNew('taxi', city.spawn.x, city.spawn.y, city.spawn.a, { m: skin.main, d: skin.dark, l: skin.light, o: WHT });
   const cin = car.in; car.turn = 1.25; car.steerRate = 5; car.maxv = 128; car.acc = 150; car.grip = 9;
   const spr = tdSpr('taxi', car.cols, 0);
   /* ---- traffic ---- */
@@ -304,7 +305,7 @@ function makeWheelman(seed, skin) {
   const fare = () => F[fi % F.length];
   const targ = () => { const f = fare(); return phase ? S[f.d] : S[f.p]; };
   function camUpdate(dt, snap) {
-    const sp = tdSpeed(car), ah = 14 + sp * 0.34 + boost * 10, hx = sp > 8 ? car.vx / sp : Math.cos(car.a), hy = sp > 8 ? car.vy / sp : Math.sin(car.a);
+    const sp = tdSpeed(car), ah = 16 + sp * 0.4 + boost * 10, hx = sp > 8 ? car.vx / sp : Math.cos(car.a), hy = sp > 8 ? car.vy / sp : Math.sin(car.a);
     const k = snap ? 1 : 1 - Math.exp(-dt * 4), kz = snap ? 1 : 1 - Math.exp(-dt * 1.8);
     camX += (car.x + hx * ah - camX) * k; camY += (car.y + hy * ah - camY) * k;
     zoom += (1 - 0.15 * clamp((sp - 45) / 100, 0, 1) - zoom) * kz;
@@ -422,8 +423,8 @@ function makeWheelman(seed, skin) {
     drawSpot(bx, targ(), phase ? 2 : 1, ox, oy);
     for (const v of TR) tdDrawSpr(bx, v.spr, v.c.a, v.c.x + ox, v.c.y + oy, v.c.z);
     // player marker ring (pulses) and car on top
-    { const cxp = Math.round(car.x + ox), cyp = Math.round(car.y + oy), rr = 10 + Math.sin(t * 7) * 1.2; for (let a = 0; a < 18; a++) if (a & 1) { const an = a / 18 * 6.2832 + t * 1.5; P(bx, cxp + Math.cos(an) * rr, cyp + Math.sin(an) * rr - car.z * 0.3, skin.light); } }
     parts.forEach(q => R(bx, q.x + ox, q.y + oy, q.sz, q.sz, q.c));
+    tdHeroMark(bx, car.x + ox, car.y + oy, car.z, t, YEL, false);
     tdDrawSpr(bx, spr, car.a, car.x + ox, car.y + oy, car.z);
     if (TH.night) tdNightBeam(bx, car, ox, oy);
     g.drawImage(BUF, 0, 0, vwI, vhI, 0, 0, VW, TD_VIEW_H);
@@ -435,7 +436,7 @@ function makeWheelman(seed, skin) {
     pops.forEach(q => T(g, q.s, clamp(sx(q.x), 24, VW - 24), clamp(sy(q.y) - q.t * 16, 34, TD_VIEW_H - 10), q.c, { al: 'c', ol: BLK }));
     g.restore();
     // HUD
-    R(g, 0, 0, VW, 27, BLK); R(g, 0, 27, VW, 1, NAVY);
+    R(g, 0, 0, VW, 27, BLK); R(g, 0, 27, VW, 1, DGR); R(g, 0, 28, VW, 1, 'rgba(0,0,0,0.4)');
     T(g, '$' + me.score, 4, 2, YEL, { s: 2 });
     const ts = Math.max(0, time); T(g, ts.toFixed(1), VW - 19, 2, ts < 10 ? (Math.floor(t * 4) & 1 ? RED : WHT) : WHT, { s: 2, al: 'r' });
     const mult = Math.min(3, 1 + 0.2 * chain);
@@ -468,14 +469,34 @@ const DEF_WHEELMAN = {
   name: 'FARE RUSH', short: 'Fare Rush', series: { name: 'DRIVING', icon: 'siren' }, tag: 'TAXI MADNESS', color: YEL, make: makeWheelman,
   how: ['>DRIVE', 'GAS TO GO, BRAKE TO STOP', 'OR REVERSE. STEER YOURSELF.', '>FARES', 'STOP IN THE GREEN RING TO', 'PICK UP. FOLLOW THE ARROW', 'AND THE MAP TO THE DROP.', 'FASTER DROP = BIGGER TIP.', '>EXTRAS', 'DRIFT, JUMP RAMPS, MISS CARS', 'BY A HAIR. CRASH = LOSE CHAIN.', 'EACH DROP ADDS TIME.'],
   art(g, x, y, w, h) {
-    R(g, x, y, w, h, NAVY); for (let i = 0; i < 14; i++) { const hh = hash2(i, 5); P(g, x + hh % w, y + (hh >>> 8) % 18, i & 1 ? WHT : LAV); }
-    for (let i = 0; i < 6; i++) { const bh = 12 + hash2(i, 3) % 12; R(g, x + i * 14, y + 34 - bh, 12, bh, i & 1 ? PLUM : DGR); for (let k = 0; k < 3; k++) P(g, x + i * 14 + 3 + k * 3, y + 34 - bh + 3, YEL); }
-    R(g, x, y + 34, w, 22, DGR); R(g, x, y + 34, w, 2, LGR); for (let i = 0; i < 6; i++) R(g, x + 4 + i * 14, y + 47, 8, 2, YEL);
-    R(g, x + 30, y + 28, 36, 13, BLK); R(g, x + 31, y + 29, 34, 11, YEL); R(g, x + 38, y + 21, 20, 8, BLK); R(g, x + 39, y + 22, 18, 7, YEL);
-    R(g, x + 40, y + 23, 7, 5, SKY); R(g, x + 49, y + 23, 7, 5, SKY); R(g, x + 42, y + 17, 12, 5, BLK); R(g, x + 43, y + 18, 10, 3, WHT); P(g, x + 45, y + 19, BLK); P(g, x + 48, y + 19, BLK); P(g, x + 51, y + 19, BLK);
-    for (let i = 0; i < 9; i++) R(g, x + 32 + i * 4, y + 33, 2, 2, i & 1 ? BLK : WHT);
-    D(g, x + 38, y + 42, 4, BLK); D(g, x + 38, y + 42, 2, LGR); D(g, x + 58, y + 42, 4, BLK); D(g, x + 58, y + 42, 2, LGR); R(g, x + 66, y + 33, 3, 3, ORG);
-    R(g, x + 12, y + 33, 5, 9, PINK); R(g, x + 12, y + 28, 5, 5, PEACH); R(g, x + 11, y + 27, 7, 2, BRN); R(g, x + 18, y + 22, 2, 8, PEACH); R(g, x + 19, y + 20, 2, 3, PEACH); R(g, x + 12, y + 42, 2, 4, NAVY); R(g, x + 15, y + 42, 2, 4, NAVY);
-    D(g, x + 72, y + 12, 8, BLK); D(g, x + 72, y + 12, 7, YEL); T(g, '$', x + 72, y + 8, BLK, { al: 'c', s: 2 });
+    g.save(); g.beginPath(); g.rect(x, y, w, h); g.clip();
+    /* dusk sky in dithered bands */
+    R(g, x, y, w, h, NAVY); DT(g, x, y + 10, w, 6, NAVY, PLUM, 0); R(g, x, y + 16, w, 6, PLUM); DT(g, x, y + 22, w, 4, PLUM, RED, 0); R(g, x, y + 26, w, 4, RED); DT(g, x, y + 30, w, 3, RED, ORG, 0);
+    for (let i = 0; i < 9; i++) { const hh = hash2(i, 11); P(g, x + hh % w, y + 1 + (hh >>> 8) % 10, i % 3 ? LAV : WHT); }
+    D(g, x + 62, y + 28, 9, ORG); D(g, x + 62, y + 28, 7, YEL); R(g, x + 53, y + 24, 19, 1, ORG); R(g, x + 53, y + 27, 19, 1, ORG);
+    /* skyline */
+    const bl = [[0, 14, 10], [9, 22, 8], [16, 11, 9], [24, 26, 7], [30, 16, 10], [39, 9, 8], [46, 20, 9], [70, 18, 8], [77, 12, 7]];
+    bl.forEach((b, i) => { const by = y + 34 - b[1]; R(g, x + b[0], by, b[2], b[1], i & 1 ? BLK : '#14102a'); R(g, x + b[0], by, b[2], 1, i & 1 ? DGR : PLUM); for (let k = by + 3; k < y + 32; k += 3) for (let j = x + b[0] + 2; j < x + b[0] + b[2] - 1; j += 3) if ((hash2(j, k) & 3) === 0) P(g, j, k, YEL); });
+    /* road in perspective */
+    R(g, x, y + 34, w, h - 34, BLK); PG(g, [[x + 34, y + 34], [x + 50, y + 34], [x + w + 30, y + h], [x - 30, y + h]], DGR);
+    PG(g, [[x + 34, y + 34], [x + 35, y + 34], [x - 26, y + h], [x - 30, y + h]], LGR); PG(g, [[x + 49, y + 34], [x + 50, y + 34], [x + w + 30, y + h], [x + w + 26, y + h]], LGR);
+    for (let k = 0; k < 4; k++) { const t0 = [0.05, 0.2, 0.42, 0.72][k], t1 = t0 + [0.06, 0.1, 0.14, 0.2][k], y0 = y + 34 + (h - 34) * t0, y1 = y + 34 + (h - 34) * t1, w0 = 0.5 + t0 * 2.5, w1 = 0.5 + t1 * 2.5; PG(g, [[x + 42 - w0, y0], [x + 42 + w0, y0], [x + 42 + w1, y1], [x + 42 - w1, y1]], YEL); }
+    /* speed lines */
+    for (let i = 0; i < 6; i++) { const yy = y + 36 + i * 3; R(g, x + 2 + (i * 13) % 12, yy, 8 + i % 3 * 3, 1, i & 1 ? WHT : LGR); }
+    /* airborne taxi (3/4 side view) + shadow */
+    E(g, x + 45, y + 52, 18, 2, BLK);
+    const cx = x + 26, cy = y + 30;
+    R(g, cx + 1, cy + 8, 38, 10, BLK); R(g, cx + 9, cy + 1, 20, 9, BLK);                         /* outline */
+    R(g, cx + 2, cy + 9, 36, 8, YEL); R(g, cx + 2, cy + 14, 36, 3, ORG); R(g, cx + 2, cy + 9, 36, 1, WHT); /* body */
+    R(g, cx + 10, cy + 2, 18, 8, YEL); R(g, cx + 12, cy + 3, 6, 5, SKY); R(g, cx + 20, cy + 3, 7, 5, SKY); P(g, cx + 13, cy + 3, WHT); P(g, cx + 21, cy + 3, WHT); R(g, cx + 19, cy + 3, 1, 6, ORG);
+    R(g, cx + 14, cy - 2, 10, 4, BLK); R(g, cx + 15, cy - 1, 8, 2, WHT); for (let i = 0; i < 4; i++) P(g, cx + 15 + i * 2, cy - 1 + (i & 1), BLK);
+    for (let i = 0; i < 9; i++) R(g, cx + 3 + i * 4, cy + 12, 2, 1, (i & 1) ? BLK : WHT);
+    R(g, cx + 37, cy + 10, 2, 2, WHT); R(g, cx + 1, cy + 10, 1, 2, RED); PG(g, [[cx + 39, cy + 10], [cx + 56, cy + 6], [cx + 56, cy + 17]], 'rgba(255,236,39,0.35)');
+    for (const wx of [cx + 9, cx + 31]) { D(g, wx, cy + 18, 4, BLK); D(g, wx, cy + 18, 2, LGR); P(g, wx, cy + 18, DGR); }
+    /* waving fare with cash */
+    const fx = x + 8, fy = y + 38; R(g, fx - 1, fy - 1, 7, 14, BLK); R(g, fx, fy + 4, 5, 6, PINK); R(g, fx + 1, fy, 3, 4, PEACH); R(g, fx + 1, fy, 3, 1, BRN); R(g, fx, fy + 10, 2, 3, NAVY); R(g, fx + 3, fy + 10, 2, 3, NAVY); R(g, fx + 5, fy - 4, 1, 8, PEACH); R(g, fx + 4, fy - 6, 4, 3, LIME); P(g, fx + 5, fy - 5, GRN);
+    /* flying bills */
+    [[x + 64, y + 8], [x + 74, y + 14], [x + 70, y + 4]].forEach((q, i) => { R(g, q[0] - 1, q[1] - 1, 7, 5, BLK); R(g, q[0], q[1], 5, 3, LIME); P(g, q[0] + 2, q[1] + 1, GRN); });
+    g.restore();
   }
 };
