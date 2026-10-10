@@ -25,7 +25,7 @@ try { match = clean(JSON.parse(store.get('fr.match') || 'null')); } catch (e) { 
 
 function clean(m) {
   if (!m || m.v !== 1 || !Number.isFinite(m.seed) || !m.res || typeof m.res !== 'object') return null;
-  const out = { v: 1, seed: m.seed >>> 0, date: String(m.date || '').slice(0, 10), res: {} };
+  const out = { v: 1, seed: m.seed >>> 0, date: String(m.date || '').slice(0, 10), res: {} }; if (m.round) out.round = m.round | 0;
   PL.forEach(p => {
     const e = m.res[p];
     if (e && Array.isArray(e.s) && e.s.length === 3 && e.s.every(Number.isFinite)) out.res[p] = { s: e.s.map(n => Math.max(0, Math.min(99999, Math.round(n)))), n: String(e.n || '').slice(0, 140) };
@@ -58,27 +58,71 @@ function standings(m) {
 function nextPlayer(from) { const i = PL.indexOf(from); for (let k = 1; k <= 3; k++) { const p = PL[(i + k) % 3]; if (!match.res[p]) return p; } return null; }
 
 
-/* ---- shared crew board (Firebase Realtime Database over plain fetch). Leave DB_URL empty to fall back to text codes. ---- */
+/* ---- shared crew board (Firebase Realtime Database over plain fetch). Leave DB_URL empty to fall back to text codes.
+   A week runs Friday 6:00am ET to the next Friday 6:00am ET. A round is 3 games; it counts only when all three have played it. ---- */
 const DB_URL = 'https://happy-friday-1898c-default-rtdb.firebaseio.com';
 const ROOM = 'hf-d52228436dde';
 const SYNC = !!DB_URL;
-function fridayKey() { const d = new Date(); d.setDate(d.getDate() - ((d.getDay() + 2) % 7)); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
-const dbUrl = k => DB_URL.replace(/\/$/, '') + '/' + ROOM + '/' + fridayKey() + k + '.json';
-function syncBase() { const key = fridayKey(); if (!match || match.date !== key) match = { v: 1, seed: seedOf('happy-friday-' + key), date: key, res: {} }; }
-let lastPull = '';
+function etNow() { const f = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', hourCycle: 'h23' }); const o = {}; f.formatToParts(new Date()).forEach(p => { o[p.type] = p.value; }); return new Date(Date.UTC(+o.year, +o.month - 1, +o.day, +o.hour)); }
+const ymd = d => d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0') + '-' + String(d.getUTCDate()).padStart(2, '0');
+function weekStart(off) { const d = etNow(); d.setUTCHours(d.getUTCHours() - 6); d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 2) % 7) + (off || 0) * 7); return d; }
+const weekKey = off => ymd(weekStart(off));
+function hoursSinceBoundary() { const s = weekStart(0); s.setUTCHours(6, 0, 0, 0); return (etNow() - s) / 36e5; }
+const dbUrl = (k, off) => DB_URL.replace(/\/$/, '') + '/' + ROOM + '/' + weekKey(off) + k + '.json';
+function mkRound(key, n, res) { const m = clean({ v: 1, seed: seedOf('happy-friday-' + key + '-r' + n), date: key, res: res || {} }); m.round = n; return m; }
+function summarize(key, raw) {
+  const rounds = []; for (let n = 1; raw['r' + n]; n++) rounds.push(mkRound(key, n, raw['r' + n]));
+  const pts = {}, tot = {}; PL.forEach(p => { pts[p] = 0; tot[p] = 0; });
+  const done = rounds.filter(m => PL.every(p => m.res[p]));
+  done.forEach(m => standings(m).forEach(r => { pts[r.p] += r.pts; tot[r.p] += r.tot; }));
+  const order = PL.slice().sort((a, b) => pts[b] - pts[a] || tot[b] - tot[a]);
+  return { key, rounds, done: done.length, pts, tot, order, winner: done.length ? order[0] : null };
+}
+let weekInfo = null, prevInfo = null, wantRound = 0, lastPull = '';
+function syncBase() { const key = weekKey(); if (!match || match.date !== key || !match.round) match = mkRound(key, 1); }
 async function pull() {
   if (!SYNC) return false;
   try {
     syncBase();
-    const r = await fetch(dbUrl('/res'), { cache: 'no-store' }); if (!r.ok) return false;
-    const j = (await r.json()) || {}, m = clean({ v: 1, seed: match.seed, date: match.date, res: j }); if (!m) return false;
-    PL.forEach(p => { if (!m.res[p] && match.res[p]) { m.res[p] = match.res[p]; pushOne(p); } }); // heal: local result that never reached the board
-    const sig = JSON.stringify(m.res); match = m; save();
+    const key = weekKey();
+    const [a, b] = await Promise.all([fetch(dbUrl('/rounds'), { cache: 'no-store' }), fetch(dbUrl('/rounds', -1), { cache: 'no-store' })]);
+    if (!a.ok) return false;
+    const raw = (await a.json()) || {}, praw = b.ok ? ((await b.json()) || {}) : {};
+    const sig = JSON.stringify([raw, praw]);
+    weekInfo = summarize(key, raw); prevInfo = summarize(weekKey(-1), praw);
+    const rs = weekInfo.rounds; let cur = rs.find(m => !PL.every(p => m.res[p]));
+    if (!cur) cur = rs.length ? rs[rs.length - 1] : mkRound(key, 1);
+    if (wantRound > cur.round) cur = mkRound(key, wantRound);
+    const old = match; match = cur;
+    if (old && old.round === cur.round && old.date === key) PL.forEach(p => { if (!cur.res[p] && old.res[p]) { cur.res[p] = old.res[p]; pushOne(p); } }); // heal a result that never reached the board
+    save();
     if (sig !== lastPull) { lastPull = sig; return true; } return false;
   } catch (e) { return false; }
 }
-function pushOne(p) { if (!SYNC || !match.res[p]) return; try { fetch(dbUrl('/res/' + p), { method: 'PUT', body: JSON.stringify(match.res[p]) }).catch(() => { }); } catch (e) { } }
-async function wipeBoard() { try { await fetch(dbUrl(''), { method: 'DELETE' }); } catch (e) { } match.res = {}; lastPull = ''; save(); }
+function pushOne(p) { if (!SYNC || !match.res[p]) return; try { fetch(dbUrl('/rounds/r' + match.round + '/' + p), { method: 'PUT', body: JSON.stringify(match.res[p]) }).catch(() => { }); } catch (e) { } }
+async function wipeBoard() { try { await fetch(dbUrl(''), { method: 'DELETE' }); } catch (e) { } wantRound = 0; match = mkRound(weekKey(), 1); lastPull = ''; weekInfo = null; save(); }
+/* ---- Friday results card (image) ---- */
+function resultCard(info) {
+  const W = 140, H = 170, cv = document.createElement('canvas'); cv.width = W; cv.height = H; const g = cv.getContext('2d'); g.imageSmoothingEnabled = false;
+  R(g, 0, 0, W, H, BLK); for (let i = 0; i < 46; i++) { const h = hash2(i, 31); P(g, h % W, (h >>> 8) % H, (h >>> 20) % 3 ? WHT : SKY); }
+  R(g, 2, 2, W - 4, H - 4, PLUM); R(g, 4, 4, W - 8, H - 8, BLK);
+  for (let i = 0; i < 46; i++) { const h = hash2(i, 31); const x = h % W, y = (h >>> 8) % H; if (x > 4 && x < W - 5 && y > 4 && y < H - 5) P(g, x, y, (h >>> 20) % 3 ? WHT : SKY); }
+  bigText(g, 'HAPPY', (W - 60) / 2, 10, YEL, 2, 2); bigText(g, 'FRIDAY', (W - 72) / 2, 26, ORG, 2, 2);
+  T(g, 'WEEK OF ' + info.key.slice(5).replace('-', '/'), W / 2, 44, LGR, { al: 'c' });
+  T(g, 'WINNER', W / 2, 57, ORG, { al: 'c' });
+  const nm = tag(info.winner).toUpperCase(), sc = nm.length * 12 <= W - 14 ? 2 : 1; T(g, nm, W / 2, 67, WHT, { al: 'c', s: sc, sh: RED });
+  const av = document.createElement('canvas'); avatar(av, info.winner); g.drawImage(av, (W - 24) / 2, 84);
+  let y = 116; info.order.forEach((p, i) => { D(g, 9, y + 3, 3, [YEL, LGR, BRN][i]); T(g, tag(p).toUpperCase(), 16, y, i ? LGR : WHT); T(g, info.pts[p] + ' PTS', W - 7, y, YEL, { al: 'r' }); y += 11; });
+  T(g, info.done + (info.done === 1 ? ' ROUND' : ' ROUNDS') + ' PLAYED', W / 2, H - 24, LGR, { al: 'c' }); T(g, 'SAME TIME NEXT FRIDAY', W / 2, H - 14, ORG, { al: 'c' });
+  return cv;
+}
+async function shareCard(info) {
+  const c = resultCard(info), out = document.createElement('canvas'); out.width = c.width * 6; out.height = c.height * 6; const og = out.getContext('2d'); og.imageSmoothingEnabled = false; og.drawImage(c, 0, 0, out.width, out.height);
+  const blob = await new Promise(r => out.toBlob(r, 'image/png')), file = new File([blob], 'happy-friday-results.png', { type: 'image/png' });
+  const text = 'Happy Friday results: ' + tag(info.winner) + ' takes the week. ' + HOME_URL;
+  if (navigator.canShare && navigator.canShare({ files: [file] })) { try { await navigator.share({ files: [file], text }); return; } catch (e) { if (e && e.name === 'AbortError') return; } }
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = file.name; document.body.appendChild(a); a.click(); a.remove();
+}
 const HOME_URL = 'https://jrod0701.github.io/Happy-friday/';
 const MEDAL = ['\u{1F947}', '\u{1F948}', '\u{1F949}'], ORD = ['1ST', '2ND', '3RD'];
 const screens = ['who', 'home', 'send'];
@@ -123,7 +167,17 @@ function renderHome() {
   else if (done) { const n = nextPlayer(me); hero.textContent = 'You’re on the board.'; main.textContent = 'SEND YOUR TEXT'; note.textContent = n ? 'Next up is ' + tag(n) + '.' : ''; }
   else { hero.textContent = others.length ? others.map(tag).join(' and ') + (others.length > 1 ? ' are' : ' is') + ' already on the board. Your turn, ' + tag(me) + '.' : 'Your turn, ' + tag(me) + '.'; main.textContent = 'PLAY'; note.textContent = 'Three games, about five minutes.'; }
   main.onclick = () => { if (!match) { newMatch(); startPlay(); } else if (!done) startPlay(); else openSend(false); };
-  $('#tonightH').textContent = match ? 'Tonight’s games' : 'Up next: three new games';
+  if (SYNC && match) {
+    const rem = PL.filter(p => !match.res[p]).map(tag).join(' and ');
+    if (all) { hero.textContent = 'Round ' + match.round + ' is done. ' + tag(standings(match)[0].p) + ' takes it.'; main.textContent = 'START ROUND ' + (match.round + 1); note.textContent = 'Same three new games for everyone.'; }
+    else if (done) note.textContent = 'Round ' + match.round + ' is waiting on ' + rem + '.';
+    else main.textContent = 'PLAY ROUND ' + match.round;
+    note.textContent += (note.textContent ? ' ' : '') + 'The tally comes Friday at 6am.';
+    main.onclick = () => { if (all) { wantRound = match.round + 1; match = mkRound(match.date, wantRound); save(); startPlay(); } else if (!done) startPlay(); else openSend(false); };
+  }
+  const sp = $('#splash'), showSp = SYNC && prevInfo && prevInfo.winner && hoursSinceBoundary() < 36; sp.hidden = !showSp;
+  if (showSp) { $('#spWin').textContent = tag(prevInfo.winner) + ' takes the week.'; const c = resultCard(prevInfo), cv = $('#spCard'); cv.width = c.width; cv.height = c.height; cv.getContext('2d').drawImage(c, 0, 0); $('#spShare').onclick = () => shareCard(prevInfo); }
+  $('#tonightH').textContent = SYNC && match ? 'Round ' + match.round + ' games' : (match ? 'Tonight’s games' : 'Up next: three new games');
   const cartsEl = $('#carts'); cartsEl.textContent = ''; lineup().forEach(d => cartsEl.appendChild(cartFor(d, match ? null : 'NEW')));
   $('#arcadeBtn').onclick = () => openArcade(0);
   const crew = $('#crew'); crew.hidden = !match; crew.textContent = '';
@@ -132,11 +186,11 @@ function renderHome() {
     PL.forEach(p => {
       const r = rows.find(x => x.p === p), row = el('div', 'pl' + (p === top && all ? ' top1' : ''));
       row.appendChild(avatarEl(p)); const d = el('div'); d.appendChild(el('b', null, tag(p))); d.appendChild(el('span', null, r ? 'Played' : 'Still to play')); row.appendChild(d);
-      if (r) row.appendChild(el('div', 'pt', r.pts + ' PTS')); crew.appendChild(row);
+      { const wp = SYNC && weekInfo && weekInfo.done ? weekInfo.pts[p] : (r ? r.pts : null); if (wp != null) row.appendChild(el('div', 'pt', wp + ' PTS')); } crew.appendChild(row);
     });
   }
   $('#joinBox').hidden = SYNC; $('#joinBox').open = !match;
-  const nb = $('#newBtn'); nb.hidden = !match; nb.textContent = SYNC ? (confirmNew ? 'Tap again to wipe everyone’s scores for this Friday' : 'Reset this Friday’s scores') : (confirmNew ? 'Tap again to replace this game night' : 'Start a fresh game night');
+  const nb = $('#newBtn'); nb.hidden = !match; nb.textContent = SYNC ? (confirmNew ? 'Tap again to wipe everyone’s scores for this week' : 'Reset this week’s scores') : (confirmNew ? 'Tap again to replace this game night' : 'Start a fresh game night');
   $('#muteBtn').textContent = SFX.muted ? 'Sound: off' : 'Sound: on';
   show('home');
 }
@@ -170,11 +224,12 @@ function opener() {
 }
 function shareParts() {
   const names = shortNames(), mine = match.res[me], n = played(match).length, all = PL.every(p => match.res[p]), nxt = nextPlayer(me), lines = [];
-  lines.push('\u{1F3AE} HAPPY FRIDAY \u{1F3AE}', '', opener(), '');
+  lines.push('\u{1F3AE} HAPPY FRIDAY' + (SYNC ? ' · ROUND ' + match.round : '') + ' \u{1F3AE}', '', opener(), '');
   const medals = names.map((nm, i) => { const pl = placeIn(match, i, me); return (n === 1 ? '⭐' : pl < 3 ? MEDAL[pl] : '\u{1F480}') + ' ' + nm; });
   lines.push(n === 1 ? 'Nobody to beat yet. Fix that.' : medals.join('   '));
   if (mine.n) lines.push('', '“' + mine.n + '”');
-  lines.push('', nxt ? tag(nxt) + ', you’re up \u{1F447}' : (all ? 'Run it back \u{1F447}' : 'Waiting on the rest of the crew \u{1F447}'), HOME_URL);
+  if (SYNC) { const rem = PL.filter(p => !match.res[p]).map(tag); if (weekInfo && weekInfo.done) lines.push('', 'WEEK: ' + weekInfo.order.map(p => tag(p) + ' ' + weekInfo.pts[p]).join(' · ')); lines.push('', rem.length ? rem.join(' and ') + ', you’re up \u{1F447}' : 'Round ' + match.round + ' is done. Start the next one \u{1F447}', HOME_URL); }
+  else lines.push('', nxt ? tag(nxt) + ', you’re up \u{1F447}' : (all ? 'Run it back \u{1F447}' : 'Waiting on the rest of the crew \u{1F447}'), HOME_URL);
   return { visible: lines.join('\n'), code: encode(match) };
 }
 function shareText() { const p = shareParts(); if (SYNC) return p.visible; return p.visible + '\n\n(game code, paste the whole text into the game)\n' + p.code; }
