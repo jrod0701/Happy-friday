@@ -96,11 +96,12 @@ function boxArt(def, cv) {
   for (let r2 = -5; r2 <= 5; r2 += 3) R(g, sx0 - 4, sy0 + r2, 8, 1, ORG);
   D(g, sx0, sy0, 3, BLK); D(g, sx0, sy0, 2, YEL); P(g, sx0 - 1, sy0 - 1, BLK); P(g, sx0 + 1, sy0 - 1, BLK); R(g, sx0 - 1, sy0 + 1, 3, 1, BLK);
 }
-function sunLogo(cv) {
+function sunLogo(cv) { // arcade joystick
   cv.width = 32; cv.height = 32; const g = cv.getContext('2d');
-  for (let a = 0; a < 12; a++) { const an = a / 12 * 6.283; L(g, 16 + Math.cos(an) * 11, 16 + Math.sin(an) * 11, 16 + Math.cos(an) * 15, 16 + Math.sin(an) * 15, ORG, 2); }
-  D(g, 16, 16, 10, BLK); D(g, 16, 16, 9, YEL);
-  R(g, 11, 12, 2, 3, BLK); R(g, 19, 12, 2, 3, BLK); R(g, 10, 18, 2, 1, BLK); R(g, 11, 19, 1, 1, BLK); R(g, 12, 20, 8, 1, BLK); R(g, 20, 19, 1, 1, BLK); R(g, 21, 18, 1, 1, BLK);
+  R(g, 3, 22, 26, 9, BLK); R(g, 4, 23, 24, 7, DGR); R(g, 4, 23, 24, 2, LGR); R(g, 4, 29, 24, 1, BLK);
+  R(g, 22, 25, 4, 4, BLK); R(g, 23, 25, 2, 2, YEL); R(g, 6, 25, 4, 4, BLK); R(g, 7, 25, 2, 2, SKY);
+  R(g, 14, 10, 5, 13, BLK); R(g, 15, 10, 3, 13, LGR); R(g, 15, 10, 1, 13, WHT);
+  D(g, 16, 8, 8, BLK); D(g, 16, 8, 7, RED); D(g, 16, 8, 5, RED); R(g, 12, 3, 4, 2, PINK); R(g, 11, 5, 2, 2, PINK); R(g, 19, 12, 4, 2, PLUM);
 }
 function avatar(cv, who) {
   const sk = SKINS[who] || SKINS.Jarrod; cv.width = 24; cv.height = 24; const g = cv.getContext('2d');

@@ -58,6 +58,27 @@ function standings(m) {
 function nextPlayer(from) { const i = PL.indexOf(from); for (let k = 1; k <= 3; k++) { const p = PL[(i + k) % 3]; if (!match.res[p]) return p; } return null; }
 
 
+/* ---- shared crew board (Firebase Realtime Database over plain fetch). Leave DB_URL empty to fall back to text codes. ---- */
+const DB_URL = '';
+const ROOM = 'hf-d52228436dde';
+const SYNC = !!DB_URL;
+function fridayKey() { const d = new Date(); d.setDate(d.getDate() - ((d.getDay() + 2) % 7)); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+const dbUrl = k => DB_URL.replace(/\/$/, '') + '/' + ROOM + '/' + fridayKey() + k + '.json';
+function syncBase() { const key = fridayKey(); if (!match || match.date !== key) match = { v: 1, seed: seedOf('happy-friday-' + key), date: key, res: {} }; }
+let lastPull = '';
+async function pull() {
+  if (!SYNC) return false;
+  try {
+    syncBase();
+    const r = await fetch(dbUrl('/res'), { cache: 'no-store' }); if (!r.ok) return false;
+    const j = (await r.json()) || {}, m = clean({ v: 1, seed: match.seed, date: match.date, res: j }); if (!m) return false;
+    PL.forEach(p => { if (!m.res[p] && match.res[p]) { m.res[p] = match.res[p]; pushOne(p); } }); // heal: local result that never reached the board
+    const sig = JSON.stringify(m.res); match = m; save();
+    if (sig !== lastPull) { lastPull = sig; return true; } return false;
+  } catch (e) { return false; }
+}
+function pushOne(p) { if (!SYNC || !match.res[p]) return; try { fetch(dbUrl('/res/' + p), { method: 'PUT', body: JSON.stringify(match.res[p]) }).catch(() => { }); } catch (e) { } }
+async function wipeBoard() { try { await fetch(dbUrl(''), { method: 'DELETE' }); } catch (e) { } match.res = {}; lastPull = ''; save(); }
 const HOME_URL = 'https://jrod0701.github.io/Happy-friday/';
 const MEDAL = ['\u{1F947}', '\u{1F948}', '\u{1F949}'], ORD = ['1ST', '2ND', '3RD'];
 const screens = ['who', 'home', 'send'];
@@ -114,8 +135,8 @@ function renderHome() {
       if (r) row.appendChild(el('div', 'pt', r.pts + ' PTS')); crew.appendChild(row);
     });
   }
-  $('#joinBox').open = !match;
-  const nb = $('#newBtn'); nb.hidden = !match; nb.textContent = confirmNew ? 'Tap again to replace this game night' : 'Start a fresh game night';
+  $('#joinBox').hidden = SYNC; $('#joinBox').open = !match;
+  const nb = $('#newBtn'); nb.hidden = !match; nb.textContent = SYNC ? (confirmNew ? 'Tap again to wipe everyone’s scores for this Friday' : 'Reset this Friday’s scores') : (confirmNew ? 'Tap again to replace this game night' : 'Start a fresh game night');
   $('#muteBtn').textContent = SFX.muted ? 'Sound: off' : 'Sound: on';
   show('home');
 }
@@ -135,7 +156,7 @@ function startPlay() {
   const rounds = lineup().map((d, i) => ({ def: d, seed: roundSeed(i) }));
   Stage.play(rounds, me, finish, () => { renderHome(); });
 }
-function finish(scores) { match.res[me] = { s: scores.slice(0, 3), n: '' }; save(); openSend(true); }
+function finish(scores) { match.res[me] = { s: scores.slice(0, 3), n: '' }; save(); pushOne(me); openSend(true); }
 
 /* ---- the text message ---- */
 function opener() {
@@ -156,7 +177,7 @@ function shareParts() {
   lines.push('', nxt ? tag(nxt) + ', you’re up \u{1F447}' : (all ? 'Run it back \u{1F447}' : 'Waiting on the rest of the crew \u{1F447}'), HOME_URL);
   return { visible: lines.join('\n'), code: encode(match) };
 }
-function shareText() { const p = shareParts(); return p.visible + '\n\n(game code, paste the whole text into the game)\n' + p.code; }
+function shareText() { const p = shareParts(); if (SYNC) return p.visible; return p.visible + '\n\n(game code, paste the whole text into the game)\n' + p.code; }
 
 const QUICK = ['Beat that.', 'Pure skill.', 'Lucky, honestly.', 'Say hi to the family.', 'Next Friday you’re mine.', 'Stretch first.', 'I believe in you. Barely.'];
 function openSend(fresh) {
@@ -176,8 +197,8 @@ function openSend(fresh) {
   updateShare(); show('send');
 }
 function updateShare() {
-  match.res[me].n = $('#noteIn').value.slice(0, 140); save();
-  const p = shareParts(), b = $('#bubble'); b.textContent = p.visible; b.appendChild(document.createElement('br')); const d = el('span', 'dim', '+ game code attached'); b.appendChild(d);
+  match.res[me].n = $('#noteIn').value.slice(0, 140); save(); pushOne(me);
+  const p = shareParts(), b = $('#bubble'); b.textContent = p.visible; b.appendChild(document.createElement('br')); if (!SYNC) { const d = el('span', 'dim', '+ game code attached'); b.appendChild(d); }
   $('#shareOut').value = shareText(); $('#copyNote').textContent = '';
 }
 $('#noteIn').addEventListener('input', updateShare);
@@ -199,12 +220,13 @@ $('#codeIn').addEventListener('input', () => {
   if (!m) { note.textContent = 'Keep pasting, I’m looking for the game code at the bottom of the text.'; return; }
   loadMatch(m); $('#codeIn').value = ''; note.textContent = ''; renderHome();
 });
-$('#newBtn').addEventListener('click', () => { if (!confirmNew) { confirmNew = true; renderHome(); return; } newMatch(); renderHome(); });
+$('#newBtn').addEventListener('click', async () => { if (!confirmNew) { confirmNew = true; renderHome(); return; } confirmNew = false; if (SYNC) await wipeBoard(); else newMatch(); renderHome(); });
 $('#whoBtn').addEventListener('click', () => renderWho());
 $('#muteBtn').addEventListener('click', () => { SFX.setMuted(!SFX.muted); renderHome(); });
 (function init() {
   $('#tag').textContent = hashPick(['Same crew. New games.', 'Still showing up.', 'Every Friday. No excuses.'], new Date().getDate());
   sunLogo($('#sun'));
+  if (SYNC) { syncBase(); renderHome(); const tick = async () => { if (!document.hidden && !$('#home').hidden && !Stage.open && await pull()) renderHome(); }; pull().then(ch => { if (ch) renderHome(); }); setInterval(tick, 7000); document.addEventListener('visibilitychange', () => { if (!document.hidden) tick(); }); return; }
   const hm = decode(location.hash || ''); if (hm) loadMatch(hm);
   renderHome();
 })();
