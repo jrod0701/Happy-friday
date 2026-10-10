@@ -4894,7 +4894,7 @@ function standings(m) {
 function nextPlayer(from) { const i = PL.indexOf(from); for (let k = 1; k <= 3; k++) { const p = PL[(i + k) % 3]; if (!match.res[p]) return p; } return null; }
 
 
-const HOME_URL = 'https://claude.ai/artifact/LzX5mDLmGrgV24niozDJVK';
+const HOME_URL = 'https://jrod0701.github.io/Happy-friday/';
 const MEDAL = ['\u{1F947}', '\u{1F948}', '\u{1F949}'], ORD = ['1ST', '2ND', '3RD'];
 const screens = ['who', 'home', 'send'];
 function show(id) { screens.forEach(s => { $('#' + s).hidden = s !== id; }); $('#whoBtn').hidden = !me || id === 'who'; window.scrollTo(0, 0); }
