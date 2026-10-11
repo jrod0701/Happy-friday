@@ -256,52 +256,10 @@ function makeMayhem(seed, skin) {
   /* ---- point-to-drive controls: drag anywhere = steer toward that direction, drag distance = throttle ----
      second finger (or the DRIFT button / Space) = handbrake. Arrow keys / WASD form the same direction vector. */
   const inp = { l: 0, r: 0, gas: 0, brk: 0, hb: 0, st: 0 };
-  const PDV = { joy: null, extra: new Map(), keys: { u: 0, d: 0, l: 0, r: 0 }, hbBtn: 0, st: { rev: 0 }, mode: 0, dx: 0, dy: 0, thr: 0, drawn: 0 };
-  const PD_DEAD = 4, PD_FULL = 30, PD_R = 34;
-  me.buttons = [
-    { id: 'hb', x: 146, y: 292, w: 42, h: 40, key: ['Space', 'ShiftLeft', 'ShiftRight'], c: skin.dark, cd: skin.main, hi: skin.light, label: 'DRIFT', icon: (g, cx, cy) => { L(g, cx - 6, cy + 1, cx - 1, cy - 2, WHT, 1); L(g, cx - 1, cy - 2, cx + 6, cy + 2, WHT, 1); } },
-    { id: 'ku', x: -80, y: -80, w: 1, h: 1, key: ['ArrowUp', 'KeyW'] }, { id: 'kd', x: -80, y: -80, w: 1, h: 1, key: ['ArrowDown', 'KeyS'] },
-    { id: 'kl', x: -80, y: -80, w: 1, h: 1, key: ['ArrowLeft', 'KeyA'] }, { id: 'kr', x: -80, y: -80, w: 1, h: 1, key: ['ArrowRight', 'KeyD'] }
-  ];
-  const PD_KEY = { ku: 'u', kd: 'd', kl: 'l', kr: 'r' };
-  me.press = id => { if (id === 'hb') PDV.hbBtn = 1; else if (PD_KEY[id]) PDV.keys[PD_KEY[id]] = 1; };
-  me.release = id => { if (id === 'hb') PDV.hbBtn = 0; else if (PD_KEY[id]) PDV.keys[PD_KEY[id]] = 0; };
-  me.onDown = (id, x, y) => {
-    if (!(x === x && y === y)) return;
-    if (!PDV.joy) PDV.joy = { id: id, ox: x, oy: y, x: x, y: y };
-    else if (PDV.joy.id !== id) PDV.extra.set(id, 1);
-  };
-  me.onMove = (id, x, y) => {
-    const j = PDV.joy; if (!j || j.id !== id || !(x === x && y === y)) return;
-    j.x = x; j.y = y;
-    const dx = x - j.ox, dy = y - j.oy, d = Math.hypot(dx, dy);
-    if (d > PD_R) { const k = (d - PD_R) / d; j.ox += dx * k; j.oy += dy * k; } /* floating origin follows the thumb */
-  };
-  me.onUp = (id, x, y) => {
-    if (PDV.joy && PDV.joy.id === id) {
-      PDV.joy = null;
-      const it = PDV.extra.keys().next(); /* a remaining finger takes over steering */
-      if (!it.done) { PDV.extra.delete(it.value); }
-    } else PDV.extra.delete(id);
-  };
-  function pdInput(dt) {
-    /* the engine drops pointers on pause without telling us: if draw ran several frames without an update, forget them */
-    if (PDV.drawn > 2) { PDV.joy = null; PDV.extra.clear(); }
-    PDV.drawn = 0;
-    let dx = 0, dy = 0, thr = 0;
-    const K = PDV.keys, kx = (K.r ? 1 : 0) - (K.l ? 1 : 0), ky = (K.d ? 1 : 0) - (K.u ? 1 : 0);
-    if (PDV.joy) {
-      const j = PDV.joy, ddx = j.x - j.ox, ddy = j.y - j.oy, d = Math.hypot(ddx, ddy);
-      if (d > PD_DEAD) { dx = ddx / d; dy = ddy / d; thr = clamp((d - PD_DEAD) / (PD_FULL - PD_DEAD), 0, 1); }
-    }
-    if (!thr && (kx || ky)) { const d = Math.hypot(kx, ky); dx = kx / d; dy = ky / d; thr = 1; }
-    PDV.dx = dx; PDV.dy = dy; PDV.thr = thr;
-    const hb = PDV.hbBtn || PDV.extra.size > 0;
-    PDV.mode = tdPointDrive(car, inp, dx, dy, thr, hb, PDV.st);
-    if (!thr && !car.air) { /* let go: coast and brake gently to a stop */
-      const sp = tdSpeed(car); if (sp > 0.01) { const k = Math.max(0, 1 - 32 * dt / sp); car.vx *= k; car.vy *= k; }
-    }
-  }
+  const PDV = tdPointCtl(skin);
+  me.buttons = PDV.buttons; me.press = PDV.press; me.release = PDV.release; me.onDown = PDV.onDown; me.onMove = PDV.onMove; me.onUp = PDV.onUp;
+  function pdInput(dt) { PDV.input(car, inp, dt, 32); }
+
   const r = rng((seed >>> 0) ^ 0x6d79a1), rr = rng((seed >>> 0) ^ 0x5bd1e995);
   const TH = MYTH[hash2(seed, 91) % MYTH.length];
   const W = myCity(seed, TH, r), map = W.map, props = W.props, peds = W.peds, statics = W.statics, ramps = W.ramps;
@@ -973,10 +931,7 @@ function makeMayhem(seed, skin) {
     {
       tdHeroMark(g, car.x + ox, car.y + oy, car.z, t, YEL);
       if (invuln <= 0 || (Math.floor(t * 12) & 1)) drawCarAt(g, car, ox, oy, 0);
-      if (PDV.thr > 0 && !me.over) { /* where the thumb is pointing */
-        const an = Math.atan2(PDV.dy, PDV.dx), rr = 17, ax = car.x + ox + Math.cos(an) * rr, ay = car.y + oy - car.z + Math.sin(an) * rr;
-        g.globalAlpha = 0.85; tdDrawArrow(g, ax, ay, an, PDV.mode === 2 ? ORG : PDV.mode === 3 ? SKY : WHT, 3.5); g.globalAlpha = 1;
-      }
+      if (!me.over) PDV.drawArrow(g, car.x + ox, car.y + oy - car.z); /* where the thumb is pointing */
     }
     pops.forEach(q => { const k = q.t; T(g, q.s, clamp(q.x + ox, 20, vw - 20), q.y + oy - k * 12, q.c, { al: 'c', ol: BLK, s: 1 }); });
     if (TH.snow) flakes.forEach(f => R(g, f[0] * zm, f[1] * zm, 1 + (f[2] > 15 ? 1 : 0), 1 + (f[2] > 15 ? 1 : 0), WHT));
@@ -1036,29 +991,10 @@ function makeMayhem(seed, skin) {
     }
     if (me.over) { R(g, 0, 200, VW, 28, 'rgba(14,12,26,0.78)'); T(g, 'TIME UP!', 96, 206, WHT, { al: 'c', s: 2, ol: BLK }); }
     tdDeck(g);
-    { /* control strip: a hint, the drift button is an engine button on the right */
-      const j = !!PDV.joy, cx = 34, cy = 297, a2 = j ? 0.35 : 1;
-      g.globalAlpha = a2;
-      for (let i = 0; i < 40; i++) { const an = i / 40 * 6.2832; P(g, Math.round(cx + Math.cos(an) * 15), Math.round(cy + Math.sin(an) * 15), DGR); }
-      const kxp = cx + Math.round(Math.cos(t * 1.3) * 8), kyp = cy + Math.round(Math.sin(t * 1.3) * 8);
-      D(g, kxp, kyp, 6, BLK); D(g, kxp, kyp, 5, LGR); D(g, kxp - 1, kyp - 1, 2, WHT);
-      T(g, 'DRAG TO', 58, 280, WHT, { sh: BLK }); T(g, 'DRIVE', 58, 290, YEL, { s: 1, sh: BLK });
-      T(g, 'ANYWHERE', 58, 302, LGR, { sh: BLK });
-      T(g, '2ND FINGER', 58, 316, LGR, { sh: BLK }); T(g, '= DRIFT', 58, 325, SKY, { sh: BLK });
-      g.globalAlpha = 1;
-    }
-    PDV.drawn++;
+    PDV.drawHint(g, t); /* control strip hint; the DRIFT button is an engine button on the right */
   };
-  me.drawOver = g => { /* floating joystick ring + knob (screen space, over everything) */
-    const j = PDV.joy; if (!j || me.over) return;
-    const ox = Math.round(j.ox), oy = Math.round(j.oy);
-    let dx = j.x - j.ox, dy = j.y - j.oy; const d = Math.hypot(dx, dy); if (d > PD_FULL) { dx *= PD_FULL / d; dy *= PD_FULL / d; }
-    g.globalAlpha = 0.5;
-    for (let i = 0; i < 64; i++) { const an = i / 64 * 6.2832, px = Math.round(ox + Math.cos(an) * PD_FULL), py = Math.round(oy + Math.sin(an) * PD_FULL); P(g, px, py + 1, BLK); P(g, px, py, PDV.thr >= 1 ? YEL : WHT); }
-    g.globalAlpha = 0.3; D(g, ox, oy, PD_DEAD + 1, WHT);
-    g.globalAlpha = 0.6; const kx2 = Math.round(ox + dx), ky2 = Math.round(oy + dy); D(g, kx2, ky2, 7, BLK); D(g, kx2, ky2, 6, PDV.mode === 2 ? ORG : LGR); D(g, kx2 - 1, ky2 - 2, 2, WHT);
-    g.globalAlpha = 1;
-  };
+  me.drawOver = g => { if (!me.over) PDV.drawOver(g); }; /* floating joystick ring + knob */
+
   me.theme = () => TH.n;
   me.debug = () => {
     let bad = false; tdCircles(car).forEach(c => { if (map.fillSolidAt(c[0], c[1])) bad = true; });

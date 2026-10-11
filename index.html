@@ -3087,6 +3087,68 @@ function tdPointDrive(c, I, dx, dy, thr, hbUser, state) {
   }
   return mode;
 }
+/* point-to-drive touch layer (additive; Mayhem + Fare Rush): floating joystick anywhere off the buttons, 2nd finger / DRIFT button = handbrake,
+   arrow keys / WASD as a direction vector. Call input() before tdCarStep, drawHint() at the end of draw(), drawOver() from me.drawOver. */
+function tdPointCtl(skin, opt) {
+  opt = opt || {};
+  const DEAD = 4, FULL = 30, FOLLOW = 34, KEY = { ku: 'u', kd: 'd', kl: 'l', kr: 'r' };
+  const P_ = { joy: null, extra: new Map(), keys: { u: 0, d: 0, l: 0, r: 0 }, hbBtn: 0, st: { rev: 0, slide: 0 }, mode: 0, dx: 0, dy: 0, thr: 0, drawn: 0 };
+  const hid = (id, k) => ({ id: id, x: -80, y: -80, w: 1, h: 1, key: k });
+  P_.buttons = [
+    { id: 'hb', x: 146, y: 292, w: 42, h: 40, key: ['Space', 'ShiftLeft', 'ShiftRight'], c: skin.dark, cd: skin.main, hi: skin.light, label: 'DRIFT', icon: (g, cx, cy) => { L(g, cx - 6, cy + 1, cx - 1, cy - 2, WHT, 1); L(g, cx - 1, cy - 2, cx + 6, cy + 2, WHT, 1); } },
+    hid('ku', ['ArrowUp', 'KeyW']), hid('kd', ['ArrowDown', 'KeyS']), hid('kl', ['ArrowLeft', 'KeyA']), hid('kr', ['ArrowRight', 'KeyD'])
+  ];
+  P_.press = id => { if (id === 'hb') P_.hbBtn = 1; else if (KEY[id]) P_.keys[KEY[id]] = 1; };
+  P_.release = id => { if (id === 'hb') P_.hbBtn = 0; else if (KEY[id]) P_.keys[KEY[id]] = 0; };
+  P_.onDown = (id, x, y) => { if (!(x === x && y === y)) return; if (!P_.joy) P_.joy = { id: id, ox: x, oy: y, x: x, y: y }; else if (P_.joy.id !== id) P_.extra.set(id, 1); };
+  P_.onMove = (id, x, y) => {
+    const j = P_.joy; if (!j || j.id !== id || !(x === x && y === y)) return;
+    j.x = x; j.y = y; const dx = x - j.ox, dy = y - j.oy, d = Math.hypot(dx, dy);
+    if (d > FOLLOW) { const k = (d - FOLLOW) / d; j.ox += dx * k; j.oy += dy * k; } /* floating origin follows the thumb */
+  };
+  P_.onUp = (id) => {
+    if (P_.joy && P_.joy.id === id) { P_.joy = null; const it = P_.extra.keys().next(); if (!it.done) P_.extra.delete(it.value); }
+    else P_.extra.delete(id);
+  };
+  /* coast = deceleration (px/s^2) applied when nothing is pointed */
+  P_.input = (car, inp, dt, coast) => {
+    if (P_.drawn > 2) { P_.joy = null; P_.extra.clear(); } /* engine dropped pointers during a pause */
+    P_.drawn = 0;
+    let dx = 0, dy = 0, thr = 0;
+    const K = P_.keys, kx = (K.r ? 1 : 0) - (K.l ? 1 : 0), ky = (K.d ? 1 : 0) - (K.u ? 1 : 0);
+    if (P_.joy) { const j = P_.joy, ddx = j.x - j.ox, ddy = j.y - j.oy, d = Math.hypot(ddx, ddy); if (d > DEAD) { dx = ddx / d; dy = ddy / d; thr = clamp((d - DEAD) / (FULL - DEAD), 0, 1); } }
+    if (!thr && (kx || ky)) { const d = Math.hypot(kx, ky); dx = kx / d; dy = ky / d; thr = 1; }
+    P_.dx = dx; P_.dy = dy; P_.thr = thr;
+    P_.mode = tdPointDrive(car, inp, dx, dy, thr, P_.hbBtn || P_.extra.size > 0, P_.st);
+    if (!thr && !car.air) { const sp = tdSpeed(car); if (sp > 0.01) { const k = Math.max(0, 1 - (coast || 32) * dt / sp); car.vx *= k; car.vy *= k; } }
+  };
+  /* small arrow next to the car showing the pointed direction (x,y = car centre in draw space) */
+  P_.drawArrow = (g, x, y, rr) => {
+    if (!(P_.thr > 0)) return; const an = Math.atan2(P_.dy, P_.dx);
+    g.globalAlpha = 0.85; tdDrawArrow(g, x + Math.cos(an) * (rr || 17), y + Math.sin(an) * (rr || 17), an, P_.mode === 2 ? ORG : P_.mode === 3 ? SKY : WHT, 3.5); g.globalAlpha = 1;
+  };
+  P_.drawHint = (g, t) => {
+    const cx = 34, cy = 297; g.globalAlpha = P_.joy ? 0.35 : 1;
+    for (let i = 0; i < 40; i++) { const an = i / 40 * 6.2832; P(g, Math.round(cx + Math.cos(an) * 15), Math.round(cy + Math.sin(an) * 15), DGR); }
+    const kxp = cx + Math.round(Math.cos(t * 1.3) * 8), kyp = cy + Math.round(Math.sin(t * 1.3) * 8);
+    D(g, kxp, kyp, 6, BLK); D(g, kxp, kyp, 5, LGR); D(g, kxp - 1, kyp - 1, 2, WHT);
+    T(g, 'DRAG TO', 58, 280, WHT, { sh: BLK }); T(g, 'DRIVE', 58, 290, YEL, { s: 1, sh: BLK });
+    T(g, opt.sub || 'ANYWHERE', 58, 302, LGR, { sh: BLK });
+    T(g, '2ND FINGER', 58, 316, LGR, { sh: BLK }); T(g, '= DRIFT', 58, 325, SKY, { sh: BLK });
+    g.globalAlpha = 1; P_.drawn++;
+  };
+  P_.drawOver = g => {
+    const j = P_.joy; if (!j) return;
+    const ox = Math.round(j.ox), oy = Math.round(j.oy);
+    let dx = j.x - j.ox, dy = j.y - j.oy; const d = Math.hypot(dx, dy); if (d > FULL) { dx *= FULL / d; dy *= FULL / d; }
+    g.globalAlpha = 0.5;
+    for (let i = 0; i < 64; i++) { const an = i / 64 * 6.2832, px = Math.round(ox + Math.cos(an) * FULL), py = Math.round(oy + Math.sin(an) * FULL); P(g, px, py + 1, BLK); P(g, px, py, P_.thr >= 1 ? YEL : WHT); }
+    g.globalAlpha = 0.3; D(g, ox, oy, DEAD + 1, WHT);
+    g.globalAlpha = 0.6; const kx2 = Math.round(ox + dx), ky2 = Math.round(oy + dy); D(g, kx2, ky2, 7, BLK); D(g, kx2, ky2, 6, P_.mode === 2 ? ORG : LGR); D(g, kx2 - 1, ky2 - 2, 2, WHT);
+    g.globalAlpha = 1;
+  };
+  return P_;
+}
 /* dark control deck behind the buttons */
 function tdDeck(g) { R(g, 0, TD_VIEW_H - 1, VW, VH - TD_VIEW_H + 1, BLK); R(g, 0, TD_VIEW_H - 1, VW, 1, DGR); R(g, 0, TD_VIEW_H - 3, VW, 2, 'rgba(0,0,0,0.35)'); }
 /* ===== FARE RUSH (wheelman.js): Crazy-Taxi-style fare game over a hand-designed, seeded city ===== */
@@ -3318,7 +3380,9 @@ function wmAngd(a, b) { let d = a - b; while (d > Math.PI) d -= 6.2832; while (d
 
 function makeWheelman(seed, skin) {
   const me = { score: 0, ended: false, over: false, buttons: [], settle: true };
-  const ctl = tdControls(skin); me.buttons = ctl.buttons; me.press = ctl.press; me.release = ctl.release;
+  /* point-to-drive: drag anywhere to point the way (distance = throttle), 2nd finger / DRIFT = handbrake, release = brake to a stop */
+  const PT = tdPointCtl(skin);
+  me.buttons = PT.buttons; me.press = PT.press; me.release = PT.release; me.onDown = PT.onDown; me.onMove = PT.onMove; me.onUp = PT.onUp;
   const city = wmCity(seed), map = city.map, S = city.spots, F = city.fares, TH = WM_TH[hash2(seed, 77) % WM_TH.length];
   const r2 = rng(((seed >>> 0) ^ 0x5eed11) >>> 0);
   /* ---- bake ---- */
@@ -3350,7 +3414,7 @@ function makeWheelman(seed, skin) {
       c = w >= 3 ? WHT : w >= 1 ? LGR : w <= -4 ? SKY : (map.at(x * 3 + 1, y * 3 + 1) === 3 ? DGR : map.at(x * 3 + 1, y * 3 + 1) === 4 ? SKY : GRN); if (map.at(x * 3 + 1, y * 3 + 1) === 3 && map.d[(y * 3 + 1) * map.w + x * 3 + 1] !== WM_TREE && c !== WHT && c !== LGR) c = DGR; P(g, x, y, c); } }
   /* ---- player ---- */
   const car = tdCarNew('taxi', city.spawn.x, city.spawn.y, city.spawn.a, { m: skin.main, d: skin.dark, l: skin.light, o: WHT });
-  const cin = car.in; car.turn = 1.25; car.steerRate = 5; car.maxv = 128; car.acc = 150; car.grip = 9;
+  const cin = car.in; cin.st = 0; car.turn = 1.25; car.steerRate = 16; car.maxv = 128; car.acc = 150; car.grip = 9;
   const spr = tdSpr('taxi', car.cols, 0);
   /* ---- traffic ---- */
   const TR = [], nodes = city.nodes, adj = city.adj;
@@ -3419,16 +3483,15 @@ function makeWheelman(seed, skin) {
     for (let i = parts.length - 1; i >= 0; i--) { const q = parts[i]; q.life -= dt; if (q.life <= 0) { parts.splice(i, 1); continue; } q.x += q.vx * dt; q.y += q.vy * dt; q.vx *= 0.96; q.vy *= 0.96; }
     for (let i = pops.length - 1; i >= 0; i--) { pops[i].t += dt; if (pops[i].t > 1.2) pops.splice(i, 1); }
     flakes.forEach(f => { f[1] += f[2] * dt; f[0] += Math.sin(t + f[2]) * 6 * dt; if (f[1] > TD_VIEW_H) { f[1] = -2; f[0] = Math.random() * VW; } });
-    const I = ctl.inp;
     if (me.over) {
-      endT += dt; cin.l = cin.r = cin.gas = cin.hb = 0; cin.brk = car.vF > 3 ? 1 : 0; tdCarStep(car, dt, map); TR.forEach(v => trStep(v, dt)); camUpdate(dt, false);
+      endT += dt; cin.l = cin.r = cin.gas = cin.hb = 0; cin.st = 0; cin.brk = car.vF > 3 ? 1 : 0; tdCarStep(car, dt, map); TR.forEach(v => trStep(v, dt)); camUpdate(dt, false);
       if (endT > 2.2) me.ended = true; rescore(); return;
     }
     time -= dt;
     if (time <= 0) { time = 0; me.over = true; endT = 0; say('TIME UP', RED); SFX.bad(); endDrift(true); rescore(); return; }
-    cin.l = I.l; cin.r = I.r; cin.gas = I.gas; cin.brk = I.brk; cin.hb = I.hb;
+    PT.input(car, cin, dt, 115);
     const sp0 = tdSpeed(car);
-    if (I.gas && !I.brk && !I.hb && !car.air && sp0 > 100 && Math.abs(car.steer) < 0.45) boostT = Math.min(1.5, boostT + dt); else boostT = Math.max(0, boostT - dt * 2.4);
+    if (cin.gas && !cin.brk && !cin.hb && !car.air && sp0 > 100 && Math.abs(car.steer) < 0.45) boostT = Math.min(1.5, boostT + dt); else boostT = Math.max(0, boostT - dt * 2.4);
     boost += (clamp((boostT - 0.25) / 1.0, 0, 1) - boost) * Math.min(1, dt * 5);
     car.maxv = 128 + 52 * boost;
     const ev = tdCarStep(car, dt, map);
@@ -3517,6 +3580,7 @@ function makeWheelman(seed, skin) {
     parts.forEach(q => R(bx, q.x + ox, q.y + oy, q.sz, q.sz, q.c));
     tdHeroMark(bx, car.x + ox, car.y + oy, car.z, t, YEL, false);
     tdDrawSpr(bx, spr, car.a, car.x + ox, car.y + oy, car.z);
+    if (!me.over) PT.drawArrow(bx, car.x + ox, car.y + oy - car.z); /* where the thumb is pointing */
     if (TH.night) tdNightBeam(bx, car, ox, oy);
     g.drawImage(BUF, 0, 0, vwI, vhI, 0, 0, VW, TD_VIEW_H);
     g.save(); g.beginPath(); g.rect(0, 0, VW, TD_VIEW_H); g.clip();
@@ -3544,21 +3608,23 @@ function makeWheelman(seed, skin) {
     if (bannerT < 1.5 && banner) T(g, banner, 96, 70, bannerC, { al: 'c', s: 2, ol: BLK });
     if (me.over) { R(g, 0, 110, VW, 52, 'rgba(14,12,26,.8)'); T(g, 'TIME UP', 96, 118, WHT, { al: 'c', s: 2, ol: BLK }); T(g, '$' + me.score, 96, 140, YEL, { al: 'c', s: 2, ol: BLK }); }
     tdDeck(g);
+    PT.drawHint(g, t); /* control strip hint; the DRIFT button is an engine button on the right */
   };
+  me.drawOver = g => { if (!me.over) PT.drawOver(g); }; /* floating joystick ring + knob */
   me.theme = () => TH.n;
   me.debug = () => {
     let bad = false; tdCircles(car).forEach(c => { if (map.fillSolidAt(c[0], c[1])) bad = true; });
     const tg = targ();
     return { x: car.x, y: car.y, a: car.a, vF: car.vF, speed: tdSpeed(car), time: +time.toFixed(2), score: me.score, cash: cash, stunt: stunt, over: me.over, phase: phase, fi: fi, chain: chain, bestChain: bestChain, drops: drops, fails: fails, bad: bad, nan: !(car.x === car.x && car.y === car.y && car.vx === car.vx && time === time), tx: tg.x, ty: tg.y, fareT: fareT, crashes: crashes, airs: airs, drifts: drifts, nms: nms, top: topSp, boost: boost, tips: tipTotal, theme: TH.n };
   };
-  me.__car = car; me.__inp = ctl.inp; me.__city = city; me.__map = map; me.__tr = TR; me.__bake = bake; me.__set = o => { Object.assign(car, o); camUpdate(0, true); };
+  me.__car = car; me.__inp = cin; me.__city = city; me.__map = map; me.__tr = TR; me.__bake = bake; me.__set = o => { Object.assign(car, o); camUpdate(0, true); };
   me.__cam = () => ({ left: left, top: top, zoom: zoom });
   me.summary = () => ['CASH $' + me.score, 'FARES ' + drops + ' LOST ' + fails, 'BEST CHAIN ' + bestChain, 'STUNTS $' + Math.round(stunt), 'TOP ' + Math.round(topSp * 0.8) + ' KMH'];
   return me;
 }
 const DEF_WHEELMAN = {
   name: 'FARE RUSH', short: 'Fare Rush', series: { name: 'DRIVING', icon: 'siren' }, tag: 'TAXI MADNESS', color: YEL, make: makeWheelman,
-  how: ['>DRIVE', 'GAS TO GO, BRAKE TO STOP', 'OR REVERSE. STEER YOURSELF.', '>FARES', 'STOP IN THE GREEN RING TO', 'PICK UP. FOLLOW THE ARROW', 'AND THE MAP TO THE DROP.', 'FASTER DROP = BIGGER TIP.', '>EXTRAS', 'DRIFT, JUMP RAMPS, MISS CARS', 'BY A HAIR. CRASH = NO CHAIN.', 'EACH DROP ADDS TIME.'],
+  how: ['>DRIVE', 'DRAG ANYWHERE TO POINT THE', 'WAY. LET GO TO STOP.', '>FARES', 'STOP IN THE GREEN RING TO', 'PICK UP. FOLLOW THE ARROW', 'AND THE MAP TO THE DROP.', 'FASTER DROP = BIGGER TIP.', '>EXTRAS', 'DRIFT, JUMP RAMPS, MISS CARS', 'BY A HAIR. CRASH = NO CHAIN.', 'EACH DROP ADDS TIME.'],
   art(g, x, y, w, h) {
     g.save(); g.beginPath(); g.rect(x, y, w, h); g.clip();
     /* dusk sky in dithered bands */
@@ -3849,52 +3915,10 @@ function makeMayhem(seed, skin) {
   /* ---- point-to-drive controls: drag anywhere = steer toward that direction, drag distance = throttle ----
      second finger (or the DRIFT button / Space) = handbrake. Arrow keys / WASD form the same direction vector. */
   const inp = { l: 0, r: 0, gas: 0, brk: 0, hb: 0, st: 0 };
-  const PDV = { joy: null, extra: new Map(), keys: { u: 0, d: 0, l: 0, r: 0 }, hbBtn: 0, st: { rev: 0 }, mode: 0, dx: 0, dy: 0, thr: 0, drawn: 0 };
-  const PD_DEAD = 4, PD_FULL = 30, PD_R = 34;
-  me.buttons = [
-    { id: 'hb', x: 146, y: 292, w: 42, h: 40, key: ['Space', 'ShiftLeft', 'ShiftRight'], c: skin.dark, cd: skin.main, hi: skin.light, label: 'DRIFT', icon: (g, cx, cy) => { L(g, cx - 6, cy + 1, cx - 1, cy - 2, WHT, 1); L(g, cx - 1, cy - 2, cx + 6, cy + 2, WHT, 1); } },
-    { id: 'ku', x: -80, y: -80, w: 1, h: 1, key: ['ArrowUp', 'KeyW'] }, { id: 'kd', x: -80, y: -80, w: 1, h: 1, key: ['ArrowDown', 'KeyS'] },
-    { id: 'kl', x: -80, y: -80, w: 1, h: 1, key: ['ArrowLeft', 'KeyA'] }, { id: 'kr', x: -80, y: -80, w: 1, h: 1, key: ['ArrowRight', 'KeyD'] }
-  ];
-  const PD_KEY = { ku: 'u', kd: 'd', kl: 'l', kr: 'r' };
-  me.press = id => { if (id === 'hb') PDV.hbBtn = 1; else if (PD_KEY[id]) PDV.keys[PD_KEY[id]] = 1; };
-  me.release = id => { if (id === 'hb') PDV.hbBtn = 0; else if (PD_KEY[id]) PDV.keys[PD_KEY[id]] = 0; };
-  me.onDown = (id, x, y) => {
-    if (!(x === x && y === y)) return;
-    if (!PDV.joy) PDV.joy = { id: id, ox: x, oy: y, x: x, y: y };
-    else if (PDV.joy.id !== id) PDV.extra.set(id, 1);
-  };
-  me.onMove = (id, x, y) => {
-    const j = PDV.joy; if (!j || j.id !== id || !(x === x && y === y)) return;
-    j.x = x; j.y = y;
-    const dx = x - j.ox, dy = y - j.oy, d = Math.hypot(dx, dy);
-    if (d > PD_R) { const k = (d - PD_R) / d; j.ox += dx * k; j.oy += dy * k; } /* floating origin follows the thumb */
-  };
-  me.onUp = (id, x, y) => {
-    if (PDV.joy && PDV.joy.id === id) {
-      PDV.joy = null;
-      const it = PDV.extra.keys().next(); /* a remaining finger takes over steering */
-      if (!it.done) { PDV.extra.delete(it.value); }
-    } else PDV.extra.delete(id);
-  };
-  function pdInput(dt) {
-    /* the engine drops pointers on pause without telling us: if draw ran several frames without an update, forget them */
-    if (PDV.drawn > 2) { PDV.joy = null; PDV.extra.clear(); }
-    PDV.drawn = 0;
-    let dx = 0, dy = 0, thr = 0;
-    const K = PDV.keys, kx = (K.r ? 1 : 0) - (K.l ? 1 : 0), ky = (K.d ? 1 : 0) - (K.u ? 1 : 0);
-    if (PDV.joy) {
-      const j = PDV.joy, ddx = j.x - j.ox, ddy = j.y - j.oy, d = Math.hypot(ddx, ddy);
-      if (d > PD_DEAD) { dx = ddx / d; dy = ddy / d; thr = clamp((d - PD_DEAD) / (PD_FULL - PD_DEAD), 0, 1); }
-    }
-    if (!thr && (kx || ky)) { const d = Math.hypot(kx, ky); dx = kx / d; dy = ky / d; thr = 1; }
-    PDV.dx = dx; PDV.dy = dy; PDV.thr = thr;
-    const hb = PDV.hbBtn || PDV.extra.size > 0;
-    PDV.mode = tdPointDrive(car, inp, dx, dy, thr, hb, PDV.st);
-    if (!thr && !car.air) { /* let go: coast and brake gently to a stop */
-      const sp = tdSpeed(car); if (sp > 0.01) { const k = Math.max(0, 1 - 32 * dt / sp); car.vx *= k; car.vy *= k; }
-    }
-  }
+  const PDV = tdPointCtl(skin);
+  me.buttons = PDV.buttons; me.press = PDV.press; me.release = PDV.release; me.onDown = PDV.onDown; me.onMove = PDV.onMove; me.onUp = PDV.onUp;
+  function pdInput(dt) { PDV.input(car, inp, dt, 32); }
+
   const r = rng((seed >>> 0) ^ 0x6d79a1), rr = rng((seed >>> 0) ^ 0x5bd1e995);
   const TH = MYTH[hash2(seed, 91) % MYTH.length];
   const W = myCity(seed, TH, r), map = W.map, props = W.props, peds = W.peds, statics = W.statics, ramps = W.ramps;
@@ -4566,10 +4590,7 @@ function makeMayhem(seed, skin) {
     {
       tdHeroMark(g, car.x + ox, car.y + oy, car.z, t, YEL);
       if (invuln <= 0 || (Math.floor(t * 12) & 1)) drawCarAt(g, car, ox, oy, 0);
-      if (PDV.thr > 0 && !me.over) { /* where the thumb is pointing */
-        const an = Math.atan2(PDV.dy, PDV.dx), rr = 17, ax = car.x + ox + Math.cos(an) * rr, ay = car.y + oy - car.z + Math.sin(an) * rr;
-        g.globalAlpha = 0.85; tdDrawArrow(g, ax, ay, an, PDV.mode === 2 ? ORG : PDV.mode === 3 ? SKY : WHT, 3.5); g.globalAlpha = 1;
-      }
+      if (!me.over) PDV.drawArrow(g, car.x + ox, car.y + oy - car.z); /* where the thumb is pointing */
     }
     pops.forEach(q => { const k = q.t; T(g, q.s, clamp(q.x + ox, 20, vw - 20), q.y + oy - k * 12, q.c, { al: 'c', ol: BLK, s: 1 }); });
     if (TH.snow) flakes.forEach(f => R(g, f[0] * zm, f[1] * zm, 1 + (f[2] > 15 ? 1 : 0), 1 + (f[2] > 15 ? 1 : 0), WHT));
@@ -4629,29 +4650,10 @@ function makeMayhem(seed, skin) {
     }
     if (me.over) { R(g, 0, 200, VW, 28, 'rgba(14,12,26,0.78)'); T(g, 'TIME UP!', 96, 206, WHT, { al: 'c', s: 2, ol: BLK }); }
     tdDeck(g);
-    { /* control strip: a hint, the drift button is an engine button on the right */
-      const j = !!PDV.joy, cx = 34, cy = 297, a2 = j ? 0.35 : 1;
-      g.globalAlpha = a2;
-      for (let i = 0; i < 40; i++) { const an = i / 40 * 6.2832; P(g, Math.round(cx + Math.cos(an) * 15), Math.round(cy + Math.sin(an) * 15), DGR); }
-      const kxp = cx + Math.round(Math.cos(t * 1.3) * 8), kyp = cy + Math.round(Math.sin(t * 1.3) * 8);
-      D(g, kxp, kyp, 6, BLK); D(g, kxp, kyp, 5, LGR); D(g, kxp - 1, kyp - 1, 2, WHT);
-      T(g, 'DRAG TO', 58, 280, WHT, { sh: BLK }); T(g, 'DRIVE', 58, 290, YEL, { s: 1, sh: BLK });
-      T(g, 'ANYWHERE', 58, 302, LGR, { sh: BLK });
-      T(g, '2ND FINGER', 58, 316, LGR, { sh: BLK }); T(g, '= DRIFT', 58, 325, SKY, { sh: BLK });
-      g.globalAlpha = 1;
-    }
-    PDV.drawn++;
+    PDV.drawHint(g, t); /* control strip hint; the DRIFT button is an engine button on the right */
   };
-  me.drawOver = g => { /* floating joystick ring + knob (screen space, over everything) */
-    const j = PDV.joy; if (!j || me.over) return;
-    const ox = Math.round(j.ox), oy = Math.round(j.oy);
-    let dx = j.x - j.ox, dy = j.y - j.oy; const d = Math.hypot(dx, dy); if (d > PD_FULL) { dx *= PD_FULL / d; dy *= PD_FULL / d; }
-    g.globalAlpha = 0.5;
-    for (let i = 0; i < 64; i++) { const an = i / 64 * 6.2832, px = Math.round(ox + Math.cos(an) * PD_FULL), py = Math.round(oy + Math.sin(an) * PD_FULL); P(g, px, py + 1, BLK); P(g, px, py, PDV.thr >= 1 ? YEL : WHT); }
-    g.globalAlpha = 0.3; D(g, ox, oy, PD_DEAD + 1, WHT);
-    g.globalAlpha = 0.6; const kx2 = Math.round(ox + dx), ky2 = Math.round(oy + dy); D(g, kx2, ky2, 7, BLK); D(g, kx2, ky2, 6, PDV.mode === 2 ? ORG : LGR); D(g, kx2 - 1, ky2 - 2, 2, WHT);
-    g.globalAlpha = 1;
-  };
+  me.drawOver = g => { if (!me.over) PDV.drawOver(g); }; /* floating joystick ring + knob */
+
   me.theme = () => TH.n;
   me.debug = () => {
     let bad = false; tdCircles(car).forEach(c => { if (map.fillSolidAt(c[0], c[1])) bad = true; });

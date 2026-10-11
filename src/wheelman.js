@@ -227,7 +227,9 @@ function wmAngd(a, b) { let d = a - b; while (d > Math.PI) d -= 6.2832; while (d
 
 function makeWheelman(seed, skin) {
   const me = { score: 0, ended: false, over: false, buttons: [], settle: true };
-  const ctl = tdControls(skin); me.buttons = ctl.buttons; me.press = ctl.press; me.release = ctl.release;
+  /* point-to-drive: drag anywhere to point the way (distance = throttle), 2nd finger / DRIFT = handbrake, release = brake to a stop */
+  const PT = tdPointCtl(skin);
+  me.buttons = PT.buttons; me.press = PT.press; me.release = PT.release; me.onDown = PT.onDown; me.onMove = PT.onMove; me.onUp = PT.onUp;
   const city = wmCity(seed), map = city.map, S = city.spots, F = city.fares, TH = WM_TH[hash2(seed, 77) % WM_TH.length];
   const r2 = rng(((seed >>> 0) ^ 0x5eed11) >>> 0);
   /* ---- bake ---- */
@@ -259,7 +261,7 @@ function makeWheelman(seed, skin) {
       c = w >= 3 ? WHT : w >= 1 ? LGR : w <= -4 ? SKY : (map.at(x * 3 + 1, y * 3 + 1) === 3 ? DGR : map.at(x * 3 + 1, y * 3 + 1) === 4 ? SKY : GRN); if (map.at(x * 3 + 1, y * 3 + 1) === 3 && map.d[(y * 3 + 1) * map.w + x * 3 + 1] !== WM_TREE && c !== WHT && c !== LGR) c = DGR; P(g, x, y, c); } }
   /* ---- player ---- */
   const car = tdCarNew('taxi', city.spawn.x, city.spawn.y, city.spawn.a, { m: skin.main, d: skin.dark, l: skin.light, o: WHT });
-  const cin = car.in; car.turn = 1.25; car.steerRate = 5; car.maxv = 128; car.acc = 150; car.grip = 9;
+  const cin = car.in; cin.st = 0; car.turn = 1.25; car.steerRate = 16; car.maxv = 128; car.acc = 150; car.grip = 9;
   const spr = tdSpr('taxi', car.cols, 0);
   /* ---- traffic ---- */
   const TR = [], nodes = city.nodes, adj = city.adj;
@@ -328,16 +330,15 @@ function makeWheelman(seed, skin) {
     for (let i = parts.length - 1; i >= 0; i--) { const q = parts[i]; q.life -= dt; if (q.life <= 0) { parts.splice(i, 1); continue; } q.x += q.vx * dt; q.y += q.vy * dt; q.vx *= 0.96; q.vy *= 0.96; }
     for (let i = pops.length - 1; i >= 0; i--) { pops[i].t += dt; if (pops[i].t > 1.2) pops.splice(i, 1); }
     flakes.forEach(f => { f[1] += f[2] * dt; f[0] += Math.sin(t + f[2]) * 6 * dt; if (f[1] > TD_VIEW_H) { f[1] = -2; f[0] = Math.random() * VW; } });
-    const I = ctl.inp;
     if (me.over) {
-      endT += dt; cin.l = cin.r = cin.gas = cin.hb = 0; cin.brk = car.vF > 3 ? 1 : 0; tdCarStep(car, dt, map); TR.forEach(v => trStep(v, dt)); camUpdate(dt, false);
+      endT += dt; cin.l = cin.r = cin.gas = cin.hb = 0; cin.st = 0; cin.brk = car.vF > 3 ? 1 : 0; tdCarStep(car, dt, map); TR.forEach(v => trStep(v, dt)); camUpdate(dt, false);
       if (endT > 2.2) me.ended = true; rescore(); return;
     }
     time -= dt;
     if (time <= 0) { time = 0; me.over = true; endT = 0; say('TIME UP', RED); SFX.bad(); endDrift(true); rescore(); return; }
-    cin.l = I.l; cin.r = I.r; cin.gas = I.gas; cin.brk = I.brk; cin.hb = I.hb;
+    PT.input(car, cin, dt, 115);
     const sp0 = tdSpeed(car);
-    if (I.gas && !I.brk && !I.hb && !car.air && sp0 > 100 && Math.abs(car.steer) < 0.45) boostT = Math.min(1.5, boostT + dt); else boostT = Math.max(0, boostT - dt * 2.4);
+    if (cin.gas && !cin.brk && !cin.hb && !car.air && sp0 > 100 && Math.abs(car.steer) < 0.45) boostT = Math.min(1.5, boostT + dt); else boostT = Math.max(0, boostT - dt * 2.4);
     boost += (clamp((boostT - 0.25) / 1.0, 0, 1) - boost) * Math.min(1, dt * 5);
     car.maxv = 128 + 52 * boost;
     const ev = tdCarStep(car, dt, map);
@@ -426,6 +427,7 @@ function makeWheelman(seed, skin) {
     parts.forEach(q => R(bx, q.x + ox, q.y + oy, q.sz, q.sz, q.c));
     tdHeroMark(bx, car.x + ox, car.y + oy, car.z, t, YEL, false);
     tdDrawSpr(bx, spr, car.a, car.x + ox, car.y + oy, car.z);
+    if (!me.over) PT.drawArrow(bx, car.x + ox, car.y + oy - car.z); /* where the thumb is pointing */
     if (TH.night) tdNightBeam(bx, car, ox, oy);
     g.drawImage(BUF, 0, 0, vwI, vhI, 0, 0, VW, TD_VIEW_H);
     g.save(); g.beginPath(); g.rect(0, 0, VW, TD_VIEW_H); g.clip();
@@ -453,21 +455,23 @@ function makeWheelman(seed, skin) {
     if (bannerT < 1.5 && banner) T(g, banner, 96, 70, bannerC, { al: 'c', s: 2, ol: BLK });
     if (me.over) { R(g, 0, 110, VW, 52, 'rgba(14,12,26,.8)'); T(g, 'TIME UP', 96, 118, WHT, { al: 'c', s: 2, ol: BLK }); T(g, '$' + me.score, 96, 140, YEL, { al: 'c', s: 2, ol: BLK }); }
     tdDeck(g);
+    PT.drawHint(g, t); /* control strip hint; the DRIFT button is an engine button on the right */
   };
+  me.drawOver = g => { if (!me.over) PT.drawOver(g); }; /* floating joystick ring + knob */
   me.theme = () => TH.n;
   me.debug = () => {
     let bad = false; tdCircles(car).forEach(c => { if (map.fillSolidAt(c[0], c[1])) bad = true; });
     const tg = targ();
     return { x: car.x, y: car.y, a: car.a, vF: car.vF, speed: tdSpeed(car), time: +time.toFixed(2), score: me.score, cash: cash, stunt: stunt, over: me.over, phase: phase, fi: fi, chain: chain, bestChain: bestChain, drops: drops, fails: fails, bad: bad, nan: !(car.x === car.x && car.y === car.y && car.vx === car.vx && time === time), tx: tg.x, ty: tg.y, fareT: fareT, crashes: crashes, airs: airs, drifts: drifts, nms: nms, top: topSp, boost: boost, tips: tipTotal, theme: TH.n };
   };
-  me.__car = car; me.__inp = ctl.inp; me.__city = city; me.__map = map; me.__tr = TR; me.__bake = bake; me.__set = o => { Object.assign(car, o); camUpdate(0, true); };
+  me.__car = car; me.__inp = cin; me.__city = city; me.__map = map; me.__tr = TR; me.__bake = bake; me.__set = o => { Object.assign(car, o); camUpdate(0, true); };
   me.__cam = () => ({ left: left, top: top, zoom: zoom });
   me.summary = () => ['CASH $' + me.score, 'FARES ' + drops + ' LOST ' + fails, 'BEST CHAIN ' + bestChain, 'STUNTS $' + Math.round(stunt), 'TOP ' + Math.round(topSp * 0.8) + ' KMH'];
   return me;
 }
 const DEF_WHEELMAN = {
   name: 'FARE RUSH', short: 'Fare Rush', series: { name: 'DRIVING', icon: 'siren' }, tag: 'TAXI MADNESS', color: YEL, make: makeWheelman,
-  how: ['>DRIVE', 'GAS TO GO, BRAKE TO STOP', 'OR REVERSE. STEER YOURSELF.', '>FARES', 'STOP IN THE GREEN RING TO', 'PICK UP. FOLLOW THE ARROW', 'AND THE MAP TO THE DROP.', 'FASTER DROP = BIGGER TIP.', '>EXTRAS', 'DRIFT, JUMP RAMPS, MISS CARS', 'BY A HAIR. CRASH = NO CHAIN.', 'EACH DROP ADDS TIME.'],
+  how: ['>DRIVE', 'DRAG ANYWHERE TO POINT THE', 'WAY. LET GO TO STOP.', '>FARES', 'STOP IN THE GREEN RING TO', 'PICK UP. FOLLOW THE ARROW', 'AND THE MAP TO THE DROP.', 'FASTER DROP = BIGGER TIP.', '>EXTRAS', 'DRIFT, JUMP RAMPS, MISS CARS', 'BY A HAIR. CRASH = NO CHAIN.', 'EACH DROP ADDS TIME.'],
   art(g, x, y, w, h) {
     g.save(); g.beginPath(); g.rect(x, y, w, h); g.clip();
     /* dusk sky in dithered bands */
