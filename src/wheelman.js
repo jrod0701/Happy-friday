@@ -331,12 +331,14 @@ function makeWheelman(seed, skin) {
     for (let i = pops.length - 1; i >= 0; i--) { pops[i].t += dt; if (pops[i].t > 1.2) pops.splice(i, 1); }
     flakes.forEach(f => { f[1] += f[2] * dt; f[0] += Math.sin(t + f[2]) * 6 * dt; if (f[1] > TD_VIEW_H) { f[1] = -2; f[0] = Math.random() * VW; } });
     if (me.over) {
-      endT += dt; cin.l = cin.r = cin.gas = cin.hb = 0; cin.st = 0; cin.brk = car.vF > 3 ? 1 : 0; tdCarStep(car, dt, map); TR.forEach(v => trStep(v, dt)); camUpdate(dt, false);
+      endT += dt; cin.l = cin.r = cin.gas = cin.hb = 0; cin.st = 0; cin.pivot = 0; cin.brk = car.vF > 3 ? 1 : 0; tdCarStep(car, dt, map); TR.forEach(v => trStep(v, dt)); camUpdate(dt, false);
       if (endT > 2.2) me.ended = true; rescore(); return;
     }
     time -= dt;
     if (time <= 0) { time = 0; me.over = true; endT = 0; say('TIME UP', RED); SFX.bad(); endDrift(true); rescore(); return; }
     PT.input(car, cin, dt, 115);
+    if (PT.pivNew) SFX.noise(PT.pivNew === 4 ? 0.22 : 0.3, 0.07, 3800, 1600); /* tyre squeal */
+    if (PT.mode === 4 && !car.air) { tdSkidMark(map, car); for (let i = 0; i < (PT.pivNew ? 8 : 3); i++) { const an = Math.random() * 6.283, v = 35 + Math.random() * 35; part(car.x - Math.cos(car.a) * 6, car.y - Math.sin(car.a) * 6, Math.cos(an) * v, Math.sin(an) * v, 0.55, Math.random() < 0.5 ? WHT : LGR, 3); } } /* pivot smoke */
     const sp0 = tdSpeed(car);
     if (cin.gas && !cin.brk && !cin.hb && !car.air && sp0 > 100 && Math.abs(car.steer) < 0.45) boostT = Math.min(1.5, boostT + dt); else boostT = Math.max(0, boostT - dt * 2.4);
     boost += (clamp((boostT - 0.25) / 1.0, 0, 1) - boost) * Math.min(1, dt * 5);

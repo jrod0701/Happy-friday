@@ -258,7 +258,14 @@ function makeMayhem(seed, skin) {
   const inp = { l: 0, r: 0, gas: 0, brk: 0, hb: 0, st: 0 };
   const PDV = tdPointCtl(skin);
   me.buttons = PDV.buttons; me.press = PDV.press; me.release = PDV.release; me.onDown = PDV.onDown; me.onMove = PDV.onMove; me.onUp = PDV.onUp;
-  function pdInput(dt) { PDV.input(car, inp, dt, 32); }
+  function pdInput(dt) {
+    PDV.input(car, inp, dt, 32);
+    if (PDV.pivNew) SFX.noise(PDV.pivNew === 4 ? 0.22 : 0.3, 0.07, 3800, 1600); /* tyre squeal */
+    if (PDV.mode === 4 && !car.air) { /* pivot: tyre smoke from the rear + skid */
+      tdSkidMark(map, car);
+      if (parts.length < 140) for (let i = 0; i < (PDV.pivNew ? 8 : 2); i++) { const an = Math.random() * 6.283, v = 30 + Math.random() * 30; part(car.x - Math.cos(car.a) * 6, car.y - Math.sin(car.a) * 6, Math.cos(an) * v, Math.sin(an) * v - 8, 0.6, Math.random() < 0.5 ? WHT : LGR, 4, 1); }
+    }
+  }
 
   const r = rng((seed >>> 0) ^ 0x6d79a1), rr = rng((seed >>> 0) ^ 0x5bd1e995);
   const TH = MYTH[hash2(seed, 91) % MYTH.length];
