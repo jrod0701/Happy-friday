@@ -7,11 +7,10 @@ const PCOL = { Jarrod: '#ffa300', Harvey: '#29adff', Anthony: '#83769c' };
 const POOL = [DEF_LOB, DEF_SNIPER, DEF_SUMMIT, DEF_KONG, DEF_WHEELMAN, DEF_DUEL, DEF_MAYHEM, DEF_RUNNER, DEF_MAILMAN];
 let match = null;
 let pendingSeed = seedOf('hf-next-' + Date.now().toString(36) + Math.random());
-const LYNCHPINS = [DEF_RUNNER, DEF_MAILMAN]; // dealt every round; the third slot rotates through the rest of the pool
-function lineup() {
-  const a = POOL.filter(d => LYNCHPINS.indexOf(d) < 0), r = rng((match ? match.seed : pendingSeed) ^ 0x9e3779b9);
+function lineup() { // deal 3 games from the whole pool, shuffled by the round's seed
+  const a = POOL.slice(), r = rng((match ? match.seed : pendingSeed) ^ 0x9e3779b9);
   for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); const t = a[i]; a[i] = a[j]; a[j] = t; }
-  return LYNCHPINS.concat(a.slice(0, 1));
+  return a.slice(0, 3);
 }
 const shortNames = () => lineup().map(d => d.short || d.name);
 const $ = s => document.querySelector(s);
@@ -279,9 +278,24 @@ $('#codeIn').addEventListener('input', () => {
 $('#newBtn').addEventListener('click', async () => { if (!confirmNew) { confirmNew = true; renderHome(); return; } confirmNew = false; if (SYNC) await wipeBoard(); else newMatch(); renderHome(); });
 $('#whoBtn').addEventListener('click', () => renderWho());
 $('#muteBtn').addEventListener('click', () => { SFX.setMuted(!SFX.muted); renderHome(); });
+/* ---- add-to-home-screen tip: iPhone can't be prompted by a page, so show how; Android/Chrome gets a real install button ---- */
+let installEvt = null;
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); installEvt = e; renderInstallTip(); });
+function renderInstallTip() {
+  const box = $('#installTip'); if (!box) return;
+  const standalone = (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
+  const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  if (standalone || store.get('fr.tipx') === '1' || (!ios && !installEvt)) { box.hidden = true; return; }
+  box.hidden = false;
+  $('#installTxt').innerHTML = ios ? 'Make it an app: tap <b>Share</b> <span aria-hidden="true">&#x2B06;&#xFE0E;</span> at the bottom of Safari, then <b>Add to Home Screen</b>.' : 'Make it an app on your home screen.';
+  $('#installGo').hidden = !installEvt;
+}
 (function init() {
   $('#tag').textContent = hashPick(['Same crew. New games.', 'Still showing up.', 'Every Friday. No excuses.'], new Date().getDate());
   sunLogo($('#sun'));
+  $('#installX').onclick = () => { store.set('fr.tipx', '1'); renderInstallTip(); };
+  $('#installGo').onclick = async () => { if (!installEvt) return; installEvt.prompt(); try { await installEvt.userChoice; } catch (e) { } installEvt = null; renderInstallTip(); };
+  renderInstallTip();
   if (SYNC) { syncBase(); renderHome(); const tick = async () => { if (!document.hidden && !$('#home').hidden && !Stage.open && await pull()) renderHome(); }; pull().then(ch => { if (ch) renderHome(); }); setInterval(tick, 7000); document.addEventListener('visibilitychange', () => { if (!document.hidden) tick(); }); return; }
   const hm = decode(location.hash || ''); if (hm) loadMatch(hm);
   renderHome();

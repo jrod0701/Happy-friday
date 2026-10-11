@@ -14,6 +14,10 @@
 body{background:var(--bg);background-image:repeating-linear-gradient(0deg,rgba(255,255,255,.025) 0 1px,transparent 1px 4px);
   color:var(--fg);font:500 16px/1.45 var(--body);padding-left:max(16px,env(safe-area-inset-left));padding-right:max(16px,env(safe-area-inset-right));padding-top:calc(18px + env(safe-area-inset-top));padding-bottom:calc(56px + env(safe-area-inset-bottom));-webkit-tap-highlight-color:transparent}
 body.staged{overflow:hidden}
+body.staged main{visibility:hidden}
+#installTip{background:#29adff;color:#0e0c1a;border:3px solid #000;box-shadow:4px 4px 0 #000;padding:12px 14px;display:grid;gap:8px;font:600 15px/1.4 var(--body)}
+#installTip .btn{justify-self:start}
+#installTip .link{color:#0e0c1a;padding:4px 0;min-height:0}
 .wrap{max-width:440px;margin:0 auto;display:grid;gap:20px}
 section{display:grid;gap:18px;min-width:0}
 [hidden]{display:none!important}
@@ -104,6 +108,7 @@ html{background:#0b0a14}
   </section>
 
   <section id="home" hidden>
+    <div id="installTip" hidden><p id="installTxt"></p><button class="btn" id="installGo" type="button" hidden>ADD TO HOME SCREEN</button><button class="link" id="installX" type="button">Got it, hide this</button></div>
     <div class="panel" id="splash" hidden><h3>Friday results</h3><h2 class="hero" id="spWin"></h2><canvas id="spCard" style="width:100%;max-width:300px;image-rendering:pixelated;justify-self:center;border:3px solid #000"></canvas><button class="btn go big" id="spShare" type="button">SEND THE RESULTS</button></div>
     <h2 class="hero" id="hero"></h2>
     <button class="btn go big" id="mainBtn" type="button"></button>
@@ -7855,11 +7860,10 @@ const PCOL = { Jarrod: '#ffa300', Harvey: '#29adff', Anthony: '#83769c' };
 const POOL = [DEF_LOB, DEF_SNIPER, DEF_SUMMIT, DEF_KONG, DEF_WHEELMAN, DEF_DUEL, DEF_MAYHEM, DEF_RUNNER, DEF_MAILMAN];
 let match = null;
 let pendingSeed = seedOf('hf-next-' + Date.now().toString(36) + Math.random());
-const LYNCHPINS = [DEF_RUNNER, DEF_MAILMAN]; // dealt every round; the third slot rotates through the rest of the pool
-function lineup() {
-  const a = POOL.filter(d => LYNCHPINS.indexOf(d) < 0), r = rng((match ? match.seed : pendingSeed) ^ 0x9e3779b9);
+function lineup() { // deal 3 games from the whole pool, shuffled by the round's seed
+  const a = POOL.slice(), r = rng((match ? match.seed : pendingSeed) ^ 0x9e3779b9);
   for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); const t = a[i]; a[i] = a[j]; a[j] = t; }
-  return LYNCHPINS.concat(a.slice(0, 1));
+  return a.slice(0, 3);
 }
 const shortNames = () => lineup().map(d => d.short || d.name);
 const $ = s => document.querySelector(s);
@@ -8127,9 +8131,24 @@ $('#codeIn').addEventListener('input', () => {
 $('#newBtn').addEventListener('click', async () => { if (!confirmNew) { confirmNew = true; renderHome(); return; } confirmNew = false; if (SYNC) await wipeBoard(); else newMatch(); renderHome(); });
 $('#whoBtn').addEventListener('click', () => renderWho());
 $('#muteBtn').addEventListener('click', () => { SFX.setMuted(!SFX.muted); renderHome(); });
+/* ---- add-to-home-screen tip: iPhone can't be prompted by a page, so show how; Android/Chrome gets a real install button ---- */
+let installEvt = null;
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); installEvt = e; renderInstallTip(); });
+function renderInstallTip() {
+  const box = $('#installTip'); if (!box) return;
+  const standalone = (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
+  const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  if (standalone || store.get('fr.tipx') === '1' || (!ios && !installEvt)) { box.hidden = true; return; }
+  box.hidden = false;
+  $('#installTxt').innerHTML = ios ? 'Make it an app: tap <b>Share</b> <span aria-hidden="true">&#x2B06;&#xFE0E;</span> at the bottom of Safari, then <b>Add to Home Screen</b>.' : 'Make it an app on your home screen.';
+  $('#installGo').hidden = !installEvt;
+}
 (function init() {
   $('#tag').textContent = hashPick(['Same crew. New games.', 'Still showing up.', 'Every Friday. No excuses.'], new Date().getDate());
   sunLogo($('#sun'));
+  $('#installX').onclick = () => { store.set('fr.tipx', '1'); renderInstallTip(); };
+  $('#installGo').onclick = async () => { if (!installEvt) return; installEvt.prompt(); try { await installEvt.userChoice; } catch (e) { } installEvt = null; renderInstallTip(); };
+  renderInstallTip();
   if (SYNC) { syncBase(); renderHome(); const tick = async () => { if (!document.hidden && !$('#home').hidden && !Stage.open && await pull()) renderHome(); }; pull().then(ch => { if (ch) renderHome(); }); setInterval(tick, 7000); document.addEventListener('visibilitychange', () => { if (!document.hidden) tick(); }); return; }
   const hm = decode(location.hash || ''); if (hm) loadMatch(hm);
   renderHome();
