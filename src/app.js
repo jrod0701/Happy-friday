@@ -285,9 +285,17 @@ function renderInstallTip() {
   const box = $('#installTip'); if (!box) return;
   const standalone = (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
   const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-  if (standalone || store.get('fr.tipx') === '1' || (!ios && !installEvt)) { box.hidden = true; return; }
+  const android = /Android/i.test(navigator.userAgent), ua = navigator.userAgent;
+  if (standalone || store.get('fr.tipx') === '1' || (!ios && !android && !installEvt)) { box.hidden = true; return; }
   box.hidden = false;
-  $('#installTxt').innerHTML = ios ? 'Make it an app: tap <b>Share</b> <span aria-hidden="true">&#x2B06;&#xFE0E;</span> at the bottom of Safari, then <b>Add to Home Screen</b>.' : 'Make it an app on your home screen.';
+  const share = '<b>Share</b> <span aria-hidden="true">&#x2B06;&#xFE0E;</span>';
+  let msg;
+  if (ios && /CriOS/.test(ua)) msg = 'Make it an app: tap ' + share + ' (top right in Chrome), then <b>Add to Home Screen</b>.';
+  else if (ios && /FxiOS|EdgiOS/.test(ua)) msg = 'Make it an app: open the browser menu, tap ' + share + ', then <b>Add to Home Screen</b>.';
+  else if (ios) msg = 'Make it an app: tap ' + share + ' at the bottom of Safari, then <b>Add to Home Screen</b>.';
+  else if (installEvt) msg = 'Make it an app on your home screen:';
+  else msg = 'Make it an app: tap the <b>&#x22EE;</b> menu in Chrome, then <b>Add to Home screen</b> (or <b>Install app</b>).';
+  $('#installTxt').innerHTML = msg;
   $('#installGo').hidden = !installEvt;
 }
 (function init() {
